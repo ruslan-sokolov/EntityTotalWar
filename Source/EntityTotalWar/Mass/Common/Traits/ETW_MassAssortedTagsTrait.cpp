@@ -5,7 +5,7 @@
 #include "MassEntityTemplateRegistry.h"
 
 
-void UETW_MassAssortedTagsTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, UWorld& World) const
+void UETW_MassAssortedTagsTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const
 {
 	for (const FInstancedStruct& Tag : Tags)
 	{

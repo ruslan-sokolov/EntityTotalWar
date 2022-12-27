@@ -5,22 +5,21 @@
 #include "MassEntityTemplateRegistry.h"
 #include "MassMovementFragments.h"
 #include "MassCommonFragments.h"
+#include "MassEntitySubsystem.h"
 #include "MassSimulationLOD.h"
-#include "MassSpawnerTypes.h"
 #include "Kismet/KismetSystemLibrary.h"
 
-void UMassSimpleRandMovementTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, UWorld& World) const
+
+void UMassSimpleRandMovementTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const
 {
 	BuildContext.AddFragment<FTransformFragment>();
 	BuildContext.AddFragment<FMassVelocityFragment>();
 	BuildContext.AddFragment<FMassMovementTargetPosFragment>();
 	BuildContext.AddTag<FMassSimpleRandMovementTag>();
 
-	UMassEntitySubsystem* EntitySubsystem = UWorld::GetSubsystem<UMassEntitySubsystem>(&World);
-	check(EntitySubsystem);
+	FMassEntityManager& EntityManager = UE::Mass::Utils::GetEntityManagerChecked(World);
 	
-	const uint32 ParamHash = UE::StructUtils::GetStructCrc32(FConstStructView::Make(Params));
-	FConstSharedStruct ParamsFragment = EntitySubsystem->GetOrCreateConstSharedFragment(ParamHash, Params);
+	const FConstSharedStruct ParamsFragment = EntityManager.GetOrCreateConstSharedFragment(Params);
 	BuildContext.AddConstSharedFragment(ParamsFragment);
 }
 
@@ -43,11 +42,12 @@ void UMassSimpleRandMovementProcessor::ConfigureQueries()
 	EntityQuery.AddRequirement<FMassSimulationVariableTickFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::Optional);
 	EntityQuery.AddChunkRequirement<FMassSimulationVariableTickChunkFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::Optional);
 	EntityQuery.SetChunkFilter(&FMassSimulationVariableTickChunkFragment::ShouldTickChunkThisFrame);
+	EntityQuery.RegisterWithProcessor(*this);
 }
 
-void UMassSimpleRandMovementProcessor::Execute(UMassEntitySubsystem& EntitySubsystem, FMassExecutionContext& Context)
+void UMassSimpleRandMovementProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
-	EntityQuery.ForEachEntityChunk(EntitySubsystem, Context, ([this](FMassExecutionContext& Context)
+	EntityQuery.ForEachEntityChunk(EntityManager, Context, ([this](FMassExecutionContext& Context)
 		{
 			const float Speed = Context.GetConstSharedFragment<FMassMassSimpleRandMovementParams>().Speed;
 			const float AcceptanceRadius = Context.GetConstSharedFragment<FMassMassSimpleRandMovementParams>().AcceptanceRadius;

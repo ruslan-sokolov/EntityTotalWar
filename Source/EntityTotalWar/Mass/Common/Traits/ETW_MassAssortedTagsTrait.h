@@ -16,7 +16,7 @@ class ENTITYTOTALWAR_API UETW_MassAssortedTagsTrait : public UMassEntityTraitBas
 
 protected:
 
-	virtual void BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, UWorld& World) const override;
+	virtual void BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const override;
 	
 	UPROPERTY(Category="Traits", EditAnywhere, meta = (BaseStruct = "MassTag", ExcludeBaseStruct))
 	TArray<FInstancedStruct> Tags;

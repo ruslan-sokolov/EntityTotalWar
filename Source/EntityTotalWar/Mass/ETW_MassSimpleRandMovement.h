@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "MassEntitySubsystem.h"
 #include "MassEntityTraitBase.h"
 #include "MassProcessor.h"
 #include "MassEntityTypes.h"
@@ -50,7 +51,7 @@ class ENTITYTOTALWAR_API UMassSimpleRandMovementTrait : public UMassEntityTraitB
 	GENERATED_BODY()
 
 public:
-	virtual void BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, UWorld& World) const override;
+	virtual void BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const override;
 
 	UPROPERTY(EditAnywhere, Category = "Mass|Movement")
 	FMassMassSimpleRandMovementParams Params;
@@ -70,7 +71,7 @@ public:
 
 protected:
 	virtual void ConfigureQueries() override;
-	virtual void Execute(UMassEntitySubsystem& EntitySubsystem, FMassExecutionContext& Context) override;
+	virtual void Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context) override;
 
 	FMassEntityQuery EntityQuery;
 };
