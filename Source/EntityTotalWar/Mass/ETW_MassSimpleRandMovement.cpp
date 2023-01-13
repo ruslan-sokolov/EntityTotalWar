@@ -60,8 +60,7 @@ void UMassSimpleRandMovementProcessor::Execute(FMassEntityManager& EntityManager
 			const TArrayView<FMassVelocityFragment> VelocitiesList = Context.GetMutableFragmentView<FMassVelocityFragment>();
 			const TArrayView<FTransformFragment> TransformList = Context.GetMutableFragmentView<FTransformFragment>();
 			const TArrayView<FMassMovementTargetPosFragment> TargetList = Context.GetMutableFragmentView<FMassMovementTargetPosFragment>();
-			
-
+		
 			for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
 			{
 				FTransform& Transform = TransformList[EntityIndex].GetMutableTransform();
@@ -86,7 +85,6 @@ void UMassSimpleRandMovementProcessor::Execute(FMassEntityManager& EntityManager
 					Transform.SetLocation(CurrentLocation + Velocity * DeltaTime);
 				}
 
-				// GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, "dt: " + FString::SanitizeFloat(DeltaTime) + " " + Transform.GetLocation().ToString());
 				
 			}
 		}));

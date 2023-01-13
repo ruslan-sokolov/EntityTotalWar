@@ -36,6 +36,7 @@ public class EntityTotalWar : ModuleRules
 				"MassRepresentation",
 				"MassReplication",
 				"MassNavigation",
+				"MassEntityDebugger",
 				
 				//needed for replication setup
 				"NetCore",
