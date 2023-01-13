@@ -12,7 +12,7 @@
 
 void UMassSimpleRandMovementTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const
 {
-	BuildContext.AddFragment<FTransformFragment>();
+	BuildContext.AddFragment_GetRef<FTransformFragment>();
 	BuildContext.AddFragment<FMassVelocityFragment>();
 	BuildContext.AddFragment<FMassMovementTargetPosFragment>();
 	BuildContext.AddTag<FMassSimpleRandMovementTag>();
@@ -89,4 +89,78 @@ void UMassSimpleRandMovementProcessor::Execute(FMassEntityManager& EntityManager
 			}
 		}));
 
+}
+
+void UETW_MassSelectRandomMoveToTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext,
+	const UWorld& World) const
+{
+	BuildContext.AddFragment<FMassMovementTargetPosFragment>();
+	BuildContext.AddTag<FMassMoveToTargetTag>();
+
+	FMassEntityManager& EntityManager = UE::Mass::Utils::GetEntityManagerChecked(World);
+	
+	const FConstSharedStruct ParamsFragment = EntityManager.GetOrCreateConstSharedFragment(Params);
+	BuildContext.AddConstSharedFragment(ParamsFragment);
+}
+
+UETW_MoveToTargetProcessor::UETW_MoveToTargetProcessor() : EntityQuery(*this)
+{
+	bAutoRegisterWithProcessingPhases = true;
+	ExecutionFlags = (int32)(EProcessorExecutionFlags::Server | EProcessorExecutionFlags::Standalone);
+	ExecutionOrder.ExecuteInGroup = UE::Mass::ProcessorGroupNames::Avoidance;
+}
+
+void UETW_MoveToTargetProcessor::ConfigureQueries()
+{
+	EntityQuery.AddTagRequirement<FMassMoveToTargetTag>(EMassFragmentPresence::All);
+
+	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
+	EntityQuery.AddRequirement<FMassForceFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FMassMovementTargetPosFragment>(EMassFragmentAccess::ReadWrite);
+
+	EntityQuery.AddConstSharedRequirement<FMassRandMoveToParams>(EMassFragmentPresence::All);
+
+	// utilize simulation variable tick rate
+	EntityQuery.AddRequirement<FMassSimulationVariableTickFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::Optional);
+	//EntityQuery.AddChunkRequirement<FMassSimulationVariableTickChunkFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::Optional);
+	EntityQuery.SetChunkFilter(&FMassSimulationVariableTickChunkFragment::ShouldTickChunkThisFrame);
+}
+
+void UETW_MoveToTargetProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
+{
+	EntityQuery.ForEachEntityChunk(EntityManager, Context, ([this](FMassExecutionContext& Context)
+		{
+			const float ForceMagnitude = Context.GetConstSharedFragment<FMassRandMoveToParams>().ForceMagnitude;
+			const float AcceptanceRadius = Context.GetConstSharedFragment<FMassRandMoveToParams>().AcceptanceRadius;
+			const float MoveDistMax = Context.GetConstSharedFragment<FMassRandMoveToParams>().MoveDistMax;
+			const float Z = Context.GetConstSharedFragment<FMassRandMoveToParams>().Z;
+
+			//const TConstArrayView<FMassSimulationVariableTickFragment> SimVariableTickList = Context.GetFragmentView<FMassSimulationVariableTickFragment>();
+			//const bool bHasVariableTick = (SimVariableTickList.Num() > 0);
+			//const float WorldDeltaTime = Context.GetDeltaTimeSeconds();
+
+			const TConstArrayView<FTransformFragment> TransformList = Context.GetFragmentView<FTransformFragment>();
+			const TArrayView ForcesList = Context.GetMutableFragmentView<FMassForceFragment>();
+			const TArrayView<FMassMovementTargetPosFragment> TargetList = Context.GetMutableFragmentView<FMassMovementTargetPosFragment>();
+		
+			for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
+			{
+				const FTransform& Transform = TransformList[EntityIndex].GetTransform();
+				FVector& Force = ForcesList[EntityIndex].Value;
+				FVector& MoveTarget = TargetList[EntityIndex].Target;
+
+				FVector CurrentLocation = Transform.GetLocation();
+				FVector Direction = MoveTarget - CurrentLocation;
+				
+				if (FMath::Abs((Direction).Size()) <= AcceptanceRadius || MoveTarget.IsZero())
+				{
+					// set new target
+					MoveTarget = FVector(FMath::FRandRange(-MoveDistMax, MoveDistMax), FMath::FRandRange(-MoveDistMax, MoveDistMax), Z);
+				}
+				else
+				{
+					Force = Direction.GetSafeNormal() * ForceMagnitude;
+				}
+			}
+		}));
 }
