@@ -18,6 +18,7 @@ void UETW_MassSelectRandMoveTargetTrait::BuildTemplate(FMassEntityTemplateBuildC
 	BuildContext.RequireFragment<FMassMoveTargetFragment>();
 	BuildContext.RequireFragment<FTransformFragment>();
 	
+	BuildContext.AddFragment<FMassTargetLocationFragment>();
 	BuildContext.AddFragment<FMassInitialLocationFragment>();
 	BuildContext.AddTag<FMassSelectRandMoveTargetTag>();
 
@@ -40,6 +41,7 @@ void UETW_MassSelectRandMoveTargetProcessor::ConfigureQueries()
 	EntityQuery.AddRequirement<FMassMoveTargetFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
 
+	EntityQuery.AddRequirement<FMassTargetLocationFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FMassInitialLocationFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddTagRequirement<FMassSelectRandMoveTargetTag>(EMassFragmentPresence::All);
 
@@ -49,6 +51,7 @@ void UETW_MassSelectRandMoveTargetProcessor::ConfigureQueries()
 	EntityQuery.AddTagRequirement<FMassOffLODTag>(EMassFragmentPresence::None);
 
 	// utilize variable tick rate if present
+	EntityQuery.SetChunkFilter(&FMassSimulationVariableTickChunkFragment::ShouldTickChunkThisFrame);
 	//EntityQuery.SetChunkFilter(&FMassSimulationVariableTickChunkFragment::ShouldTickChunkThisFrame);
 }
 
@@ -62,12 +65,14 @@ void UETW_MassSelectRandMoveTargetProcessor::Execute(FMassEntityManager& EntityM
 			const float ArriveSlackRadius = Context.GetConstSharedFragment<FMassSelectRandMoveTargetParams>().TargetReachThreshold;
 		
 			const TArrayView<FMassMoveTargetFragment> MoveTargetList = Context.GetMutableFragmentView<FMassMoveTargetFragment>();
+			const TArrayView<FMassTargetLocationFragment> TargetLocationList = Context.GetMutableFragmentView<FMassTargetLocationFragment>();
 			const TConstArrayView<FMassInitialLocationFragment> InitialLocationList = Context.GetFragmentView<FMassInitialLocationFragment>();
 			const TConstArrayView<FTransformFragment> TransformList = Context.GetFragmentView<FTransformFragment>();
 
 			for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
 			{
 				FMassMoveTargetFragment& MoveTargetFrag = MoveTargetList[EntityIndex];
+				FVector& TargetLocation = TargetLocationList[EntityIndex].Target;
 				const FVector& InitialLocation = InitialLocationList[EntityIndex].Location;
 				const FTransform& Transform = TransformList[EntityIndex].GetTransform();
 
@@ -79,11 +84,14 @@ void UETW_MassSelectRandMoveTargetProcessor::Execute(FMassEntityManager& EntityM
 					MoveTargetFrag.CreateNewAction(EMassMovementAction::Move, *World);
 					MoveTargetFrag.IntentAtGoal = EMassMovementAction::Stand;
 					const FVector NewMoveToLocation = FVector(FMath::FRandRange(-MoveDistMax, MoveDistMax), FMath::FRandRange(-MoveDistMax, MoveDistMax), 0) + InitialLocation;
-					MoveTargetFrag.Center = NewMoveToLocation;
+					TargetLocation = NewMoveToLocation;
+					// MoveTargetFrag.Center = NewMoveToLocation;
 				}
 				
 				// update MoveTargetFragment
-				FVector DirectionToTarget = MoveTargetFrag.Center - CurrentLocation;
+				FVector DirectionToTarget = TargetLocation - CurrentLocation;
+				MoveTargetFrag.Center = CurrentLocation;
+				// FVector DirectionToTarget = MoveTargetFrag.Center - CurrentLocation;
 				MoveTargetFrag.Forward = DirectionToTarget.GetSafeNormal();
 				MoveTargetFrag.DistanceToGoal = DirectionToTarget.Size();
 
@@ -116,6 +124,7 @@ void UETW_MassSelectRandMoveTargetInitializer::ConfigureQueries()
 	EntityQuery.AddTagRequirement<FMassSelectRandMoveTargetTag>(EMassFragmentPresence::All);
 
 	EntityQuery.AddConstSharedRequirement<FMassMovementParameters>(EMassFragmentPresence::All);
+	//EntityQuery.AddConstSharedRequirement<FMassSelectRandMoveTargetParams>(EMassFragmentPresence::All);
 }
 
 void UETW_MassSelectRandMoveTargetInitializer::Execute(FMassEntityManager& EntityManager,
@@ -124,6 +133,7 @@ void UETW_MassSelectRandMoveTargetInitializer::Execute(FMassEntityManager& Entit
 	EntityQuery.ForEachEntityChunk(EntityManager, Context, [](FMassExecutionContext Context)
 	{
 		const float DesiredSpeed = Context.GetConstSharedFragment<FMassMovementParameters>().MaxSpeed;
+		//const float TargetReachThreshold = Context.GetConstSharedFragment<FMassSelectRandMoveTargetParams>().TargetReachThreshold;
 
 		const TArrayView<FMassInitialLocationFragment> InitialLocationList = Context.GetMutableFragmentView<FMassInitialLocationFragment>();
 		const TArrayView<FMassMoveTargetFragment> MoveTargetList = Context.GetMutableFragmentView<FMassMoveTargetFragment>();
@@ -136,6 +146,10 @@ void UETW_MassSelectRandMoveTargetInitializer::Execute(FMassEntityManager& Entit
 
 			// initialize desired speed:
 			MoveTargetList[EntityIndex].DesiredSpeed = FMassInt16Real(DesiredSpeed);
+
+			// initialize target reach threshold:
+            // MoveTargetList[EntityIndex].SlackRadius = TargetReachThreshold;
 		}
 	});
 }
+
