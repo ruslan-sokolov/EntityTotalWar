@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "MassEntitySubsystem.h"
 #include "MassEntityTraitBase.h"
 #include "MassProcessor.h"
 #include "MassEntityTypes.h"
@@ -13,14 +12,6 @@ USTRUCT()
 struct FMassSimpleRandMovementTag : public FMassTag
 {
 	GENERATED_BODY()
-};
-
-USTRUCT()
-struct FMassMovementTargetPosFragment : public FMassFragment
-{
-	GENERATED_BODY()
-
-	FVector Target;
 };
 
 USTRUCT()
@@ -39,32 +30,6 @@ struct ENTITYTOTALWAR_API FMassMassSimpleRandMovementParams : public FMassShared
 	/**  */
 	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0", ForceUnits="cm"))
 	float MoveDistMax = 400.f;
-};
-
-USTRUCT()
-struct FMassMoveToTargetTag : public FMassTag
-{
-	GENERATED_BODY()
-};
-
-USTRUCT()
-struct ENTITYTOTALWAR_API FMassRandMoveToParams : public FMassSharedFragment
-{
-	GENERATED_BODY()
-
-	/** AcceptanceRadius cm */
-	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0", ForceUnits="cm"))
-	float AcceptanceRadius = 200.f;
-
-	/** Force cm / s^2 */
-	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0", ForceUnits="cm / s^2"))
-	float ForceMagnitude = 200.f;
-
-	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0", ForceUnits="cm"))
-	float MoveDistMax = 400.f;
-
-	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0", ForceUnits="cm"))
-	float Z = 50.f;
 };
 
 
@@ -94,41 +59,6 @@ class ENTITYTOTALWAR_API UMassSimpleRandMovementProcessor : public UMassProcesso
 
 public:
 	UMassSimpleRandMovementProcessor();
-
-protected:
-	virtual void ConfigureQueries() override;
-	virtual void Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context) override;
-
-	FMassEntityQuery EntityQuery;
-};
-
-
-/**
- * 
- */
-UCLASS(meta = (DisplayName = "Select Random Move To"))
-class ENTITYTOTALWAR_API UETW_MassSelectRandomMoveToTrait : public UMassEntityTraitBase
-{
-	GENERATED_BODY()
-	
-public:
-	virtual void BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const override;
-
-	UPROPERTY(EditAnywhere, Category = "Mass|Movement")
-	FMassRandMoveToParams Params;
-};
-
-
-/**
- * 
- */
-UCLASS()
-class ENTITYTOTALWAR_API UETW_MoveToTargetProcessor : public UMassProcessor
-{
-	GENERATED_BODY()
-
-public:
-	UETW_MoveToTargetProcessor();
 
 protected:
 	virtual void ConfigureQueries() override;
