@@ -11,7 +11,7 @@ UCLASS()
 class ENTITYTOTALWAR_API AETW_PlayerCameraPawn : public APawn
 {
 	GENERATED_BODY()
-
+	
 	UPROPERTY(VisibleAnywhere)
 	USceneComponent* RootComp;
 
@@ -21,6 +21,9 @@ class ENTITYTOTALWAR_API AETW_PlayerCameraPawn : public APawn
 	UPROPERTY(Category = Camera, EditDefaultsOnly, meta = (AllowPrivateAccess = "true"))
 	class UCameraComponent* CameraComp;
 
+	UPROPERTY(Category = Camera, EditDefaultsOnly, meta = (AllowPrivateAccess = "true"))
+	class UMassCommanderComponent* MassCommanderComp;	
+	
 	// movement ------------------------------------------------ /
 
 	UPROPERTY(Category = Camera, EditDefaultsOnly, meta = (AllowPrivateAccess = "true"))
@@ -63,10 +66,19 @@ class ENTITYTOTALWAR_API AETW_PlayerCameraPawn : public APawn
 	UPROPERTY(Category = Camera, EditDefaultsOnly, meta = (AllowPrivateAccess = "true"))
 	float OnZoomSpringArmLenMax;
 	
-
+public:
+	/** Name of the CharacterMovement component. Use this name if you want to use a different class (with ObjectInitializer.SetDefaultSubobjectClass). */
+	static FName MassCommanderComponentName;
 
 public:
 	AETW_PlayerCameraPawn();
+
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnTrySelectUnit(const FHitResult& HitResult, bool bSuccess);
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnTryCommandUnit(const FHitResult& HitResult, bool bSuccess);
 
 protected:
 
@@ -82,6 +94,7 @@ private:
 	bool bCameraShouldRotate;
 	bool bCameraShouldMove;
 	bool bSelectIsPressed;
+	bool bApplyActionIsPressed;
 
 	bool MouseXYInputIsUsed() const { return bCameraShouldMove || bCameraShouldRotate || bSelectIsPressed; }
 
@@ -90,6 +103,9 @@ private:
 
 	void OnSelect_Pressed();
 	void OnSelect_Released();
+
+	void OnApplyAction_Pressed();
+	void OnApplyAction_Released();
 
 	void OnRotateCamera_Pressed();
 	void OnRotateCamera_Released();

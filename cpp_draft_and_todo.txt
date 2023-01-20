@@ -1,0 +1,55 @@
+UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	if (NavSys)
+	{
+		FPathFindingResult PathResult = NavSys->FindPathSync(Query);
+		if (PathResult.Result != ENavigationQueryResult::Error)
+		{
+			if (PathResult.IsSuccessful() && PathResult.Path.IsValid())
+			{
+				if (MoveRequest.IsMoveToActorRequest())
+				{
+					PathResult.Path->SetGoalActorObservation(*MoveRequest.GetGoalActor(), 100.0f);
+				}
+
+				PathResult.Path->EnableRecalculationOnInvalidation(true);
+				OutPath = PathResult.Path;
+			}
+		}
+		else
+		{
+			UE_VLOG(this, LogAINavigation, Error, TEXT("Trying to find path to %s resulted in Error")
+				, MoveRequest.IsMoveToActorRequest() ? *GetNameSafe(MoveRequest.GetGoalActor()) : *MoveRequest.GetGoalLocation().ToString());
+			UE_VLOG_SEGMENT(this, LogAINavigation, Error, GetPawn() ? GetPawn()->GetActorLocation() : FAISystem::InvalidLocation
+				, MoveRequest.GetGoalLocation(), FColor::Red, TEXT("Failed move to %s"), *GetNameSafe(MoveRequest.GetGoalActor()));
+		}
+	}
+
+void AAIController::FindPathForMoveRequest(const FAIMoveRequest& MoveRequest, FPathFindingQuery& Query, FNavPathSharedPtr& OutPath) const
+void UPathFollowingComponent::FollowPathSegment(float DeltaTime)
+
+// create or find navigationsybsystem
+
+// todo with style and ideology of mass entity framework: 
+1. pass location projected from cursor to state tree
+2. create task to retrive path and save (upgrade to async path request)
+3. create task to move by pass
+
+4.0 hit detection (try async or parallel processing)
+
+4. health  killing (destroying)
+
+*4.1 maybe colliding with landscape
+
+5. do damage with linetrace (deffered call probably or async)
+
+**5.1 do damage with projectile (projectile entity) (dynamic spawn and destroying deffered)
+
+
+6. squad relation
+7. squad movement (try single point with offsets)
+8. squad reformat
+ 
+ 9. REPLICATION
+
+
+

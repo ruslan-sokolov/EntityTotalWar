@@ -3,14 +3,16 @@
 
 #include "ETW_PlayerCameraPawn.h"
 
+#include "MassAIBehaviorTypes.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Mass/MassCommanderComponent.h"
 
+FName AETW_PlayerCameraPawn::MassCommanderComponentName(TEXT("MassCommanderComp"));
 
 // Sets default values
 AETW_PlayerCameraPawn::AETW_PlayerCameraPawn()
 {
- 	// Set this pawn to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
 	RootComp = CreateDefaultSubobject<USceneComponent>(TEXT("RootComponent"));
@@ -21,6 +23,8 @@ AETW_PlayerCameraPawn::AETW_PlayerCameraPawn()
 	SpringArmComp->bDoCollisionTest = false;
 	CameraComp = CreateDefaultSubobject<UCameraComponent>(TEXT("PlayerCamera"));
 	CameraComp->SetupAttachment(SpringArmComp);
+
+	MassCommanderComp = CreateDefaultSubobject<UMassCommanderComponent>(MassCommanderComponentName);
 
 	// defaults
 	CameraMoveSpeedMax = 16000.f;
@@ -63,6 +67,9 @@ void AETW_PlayerCameraPawn::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 	PlayerInputComponent->BindAction("Select", IE_Pressed, this, &AETW_PlayerCameraPawn::OnSelect_Pressed);
 	PlayerInputComponent->BindAction("Select", IE_Released, this, &AETW_PlayerCameraPawn::OnSelect_Released);
+	
+	PlayerInputComponent->BindAction("ApplyAction", IE_Pressed, this, &AETW_PlayerCameraPawn::OnApplyAction_Pressed);
+	PlayerInputComponent->BindAction("ApplyAction", IE_Released, this, &AETW_PlayerCameraPawn::OnApplyAction_Released);
 }
 
 void AETW_PlayerCameraPawn::PossessedBy(AController* NewController)
@@ -108,7 +115,7 @@ void AETW_PlayerCameraPawn::OnSelect_Pressed()
 	{
 		return;
 	}
-
+	
 	bSelectIsPressed = true;
 
 	// check if should move camera on cursor double click
@@ -129,6 +136,11 @@ void AETW_PlayerCameraPawn::OnSelect_Pressed()
 			}
 		}
 	}
+	else
+	{
+		ensure(MassCommanderComp);
+		MassCommanderComp->TrySelectUnit();
+	}
 	
 }
 
@@ -138,6 +150,22 @@ void AETW_PlayerCameraPawn::OnSelect_Released()
 
 	// for moving camera on double click mouse
 	SelectButtonReleasedTime = GetWorld()->GetTimeSeconds();
+}
+
+void AETW_PlayerCameraPawn::OnApplyAction_Pressed()
+{
+	bApplyActionIsPressed = true;
+}
+
+void AETW_PlayerCameraPawn::OnApplyAction_Released()
+{
+	bApplyActionIsPressed = false;
+
+	if (Velocity.Size() <= 20.f)
+	{
+		ensure(MassCommanderComp);
+		MassCommanderComp->TryCommandUnit();
+	}
 }
 
 void AETW_PlayerCameraPawn::OnRotateCamera_Pressed()

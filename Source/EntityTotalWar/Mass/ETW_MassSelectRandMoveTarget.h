@@ -35,7 +35,7 @@ struct ENTITYTOTALWAR_API FMassSelectRandMoveTargetParams : public FMassSharedFr
 /**
  * 
  */
-UCLASS(meta = (DisplayName = "Select Rand Move Target XY"))
+UCLASS(meta = (DisplayName = "ETW Select Rand Move Target XY"))
 class ENTITYTOTALWAR_API UETW_MassSelectRandMoveTargetTrait : public UMassEntityTraitBase
 {
 	GENERATED_BODY()

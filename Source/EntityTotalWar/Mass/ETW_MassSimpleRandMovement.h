@@ -36,7 +36,7 @@ struct ENTITYTOTALWAR_API FMassMassSimpleRandMovementParams : public FMassShared
 /**
  * 
  */
-UCLASS(meta = (DisplayName = "Simple Random Movement"))
+UCLASS(meta = (DisplayName = "ETW Simple Random Movement"))
 class ENTITYTOTALWAR_API UMassSimpleRandMovementTrait : public UMassEntityTraitBase
 {
 	GENERATED_BODY()
