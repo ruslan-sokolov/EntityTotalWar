@@ -146,7 +146,7 @@ void UETW_MassSelectRandMoveTargetInitializer::Execute(FMassEntityManager& Entit
 
 			// initialize desired speed:
 			MoveTargetList[EntityIndex].DesiredSpeed = FMassInt16Real(DesiredSpeed);
-
+			
 			// initialize target reach threshold:
             // MoveTargetList[EntityIndex].SlackRadius = TargetReachThreshold;
 		}

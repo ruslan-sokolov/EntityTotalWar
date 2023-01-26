@@ -52,4 +52,10 @@ void UPathFollowingComponent::FollowPathSegment(float DeltaTime)
  9. REPLICATION
 
 
+!!! Mass Nav Movement Subsystem -> replicate few points to fragment
+!!! Mass Nav Movement Subsystem -> Find path async -> signal processor
+
+!!! Maybe do the same with Surface Movement
+
+
 
