@@ -4,83 +4,10 @@
 
 #include "MassEntityTraitBase.h"
 #include "MassProcessor.h"
-#include "MassEntityTypes.h"
 #include "MassObserverProcessor.h"
-#include "NavigationSystem/Public/NavigationData.h"
+#include "ETW_MassNavigationTypes.h"
 #include "ETW_MassPathFollowing.generated.h"
 
-
-// ---                              ||
-// Set Rand FMassMoveTargetFragment ||
-// ---                              \/
-
-USTRUCT()
-struct FMassPathFollowingProgressTag : public FMassTag
-{
-	GENERATED_BODY();
-};
-
-USTRUCT()
-struct FMassPathFollowingRequestTag : public FMassTag
-{
-	GENERATED_BODY();
-};
-
-// todo: for async
-USTRUCT()
-struct FMassPathFollowingRespondTag : public FMassTag
-{
-	GENERATED_BODY();
-};
-
-// todo: use global squad ai controller for avoiding massive code duplication and bugs
-// todo: move from fragment to subsystem (heavy to store in entity) or make shared non const fragment
-USTRUCT()
-struct FMassPathFragment : public FMassFragment
-{
-	GENERATED_BODY()
-	
-	FNavigationPath NavPath;
-	
-	uint32 NextPathVertIdx = 0;
-
-	void SetNavPath(const FNavigationPath& InNavPath)
-	{
-		NavPath = InNavPath;
-		NextPathVertIdx = 0;
-	}
-	
-	bool GetNextPathPoint(FVector& OutPathPoint)
-	{
-		bool bSuccess = false;
-	
-		TArray<FNavPathPoint>& PathPoints = NavPath.GetPathPoints();
-		if (PathPoints.IsValidIndex(NextPathVertIdx))
-		{
-			OutPathPoint = PathPoints[NextPathVertIdx++].Location;
-			bSuccess = true;
-		}
-
-		return bSuccess;
-	}
-};
-
-USTRUCT()
-struct ENTITYTOTALWAR_API FMassPathFollowParams : public FMassSharedFragment
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere)
-	FNavAgentProperties NavAgentProps = FNavAgentProperties::DefaultProperties;
-	
-	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0", ForceUnits="cm"))
-	float SlackRadius = 30.f;
-
-	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0", ForceUnits="cm"))
-	float TempTestRandomNavigationRadius = 3000.f;
-
-	// todo config NavPoints step
-};
 
 /**
  * 
