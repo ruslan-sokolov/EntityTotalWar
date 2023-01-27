@@ -26,6 +26,10 @@ public:
 	bool EntityExtractNextPathPoint(const FMassEntityHandle Entity, FMassPathFragment& OutPathFragment);
 	void EntityExtractNextPathPointDeferred(FMassExecutionContext& Context, const FMassEntityHandle Entity, FMassPathFragment& OutPathFragment);
 
+	const FNavigationPath* const EntityGetNavPath(const FMassEntityHandle Entity) const
+	{
+		return EntityNavigationPathMap.Find(Entity);
+	}
 
 protected:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;

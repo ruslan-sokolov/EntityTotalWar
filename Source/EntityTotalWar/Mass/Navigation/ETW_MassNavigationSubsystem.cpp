@@ -23,7 +23,7 @@ void UETW_MassNavigationSubsystem::EntityRequestNewPath(const FMassEntityHandle 
 	const FPathFindingResult PathResult = NavigationSystem->FindPathSync(NavAgentProps, Query, EPathFindingMode::Hierarchical);  // todo: async
 	if (PathResult.Result != ENavigationQueryResult::Error)
 	{
-		EntityNavigationPathMap.FindOrAdd(Entity, *PathResult.Path.Get());
+		EntityNavigationPathMap.Emplace(Entity, *PathResult.Path.Get());
 		OutPathFragment.NextPathVertIdx = 0;
 	}
 	else

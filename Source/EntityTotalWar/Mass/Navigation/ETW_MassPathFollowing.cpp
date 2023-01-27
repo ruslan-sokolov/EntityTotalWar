@@ -99,6 +99,16 @@ void UETW_MassPathFollowProcessor::Execute(FMassEntityManager& EntityManager, FM
 						const FVector NewMoveToLocation = FVector(FMath::FRandRange(-DistMax, DistMax), FMath::FRandRange(-DistMax, DistMax), 0) + CurrentLocation;
 						NavigationSubsystem->EntityRequestNewPath(EntityHandle, PathFollowParams, CurrentLocation, NewMoveToLocation, PathFrag);
 
+						// dbg temp remove
+						if (auto NavPath = NavigationSubsystem->EntityGetNavPath(EntityHandle))
+						{
+							auto Color = FLinearColor::MakeRandomColor().ToFColor(true);
+							for (auto& Point : NavPath->GetPathPoints())
+							{
+								DrawDebugSphere(World, Point.Location, 40.f, 8, Color, false, 5.f);
+							}
+						}
+						
 						if (NavigationSubsystem->EntityExtractNextPathPoint(EntityHandle, PathFrag))
 						{
 							// set new target from path list
