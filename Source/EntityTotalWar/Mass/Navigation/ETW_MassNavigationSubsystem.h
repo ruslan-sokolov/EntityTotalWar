@@ -30,7 +30,11 @@ public:
 protected:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 
+	/** Creates all runtime data using main collection */
+	void InitializeRuntime();
+	
 	UPROPERTY()
 	TObjectPtr<UMassSignalSubsystem> SignalSubsystem;
 

@@ -30,6 +30,7 @@ public class EntityTotalWar : ModuleRules
 				"MassSpawner",
 				"MassGameplayDebug",
 				"MassSignals",
+				"MassSimulation",
 				"MassCrowd",
 				"MassActors",
 				"MassSpawner",

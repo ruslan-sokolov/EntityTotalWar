@@ -23,7 +23,7 @@ void UETW_MassNavigationSubsystem::EntityRequestNewPath(const FMassEntityHandle 
 	const FPathFindingResult PathResult = NavigationSystem->FindPathSync(NavAgentProps, Query, EPathFindingMode::Hierarchical);  // todo: async
 	if (PathResult.Result != ENavigationQueryResult::Error)
 	{
-		EntityNavigationPathMap[Entity] = MoveTemp(*PathResult.Path.Get());
+		EntityNavigationPathMap.FindOrAdd(Entity, *PathResult.Path.Get());
 		OutPathFragment.NextPathVertIdx = 0;
 	}
 	else
@@ -76,16 +76,26 @@ void UETW_MassNavigationSubsystem::EntityExtractNextPathPointDeferred(FMassExecu
 void UETW_MassNavigationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	// Collection.InitializeDependency<UMassSimulationSubsystem>(); // todo: fix unresolved external link
+	Collection.InitializeDependency<UMassSimulationSubsystem>(); // todo: fix unresolved external link
 
 	SignalSubsystem = Collection.InitializeDependency<UMassSignalSubsystem>();
 	checkfSlow(SignalSubsystem != nullptr, TEXT("MassSignalSubsystem is required"));
-
-	NavigationSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()); // todo check if not null
 }
 
 void UETW_MassNavigationSubsystem::Deinitialize()
 {
 	
 	Super::Deinitialize(); 	// should called at the end
+}
+
+void UETW_MassNavigationSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+
+	InitializeRuntime();
+}
+
+void UETW_MassNavigationSubsystem::InitializeRuntime()
+{
+	NavigationSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 }
