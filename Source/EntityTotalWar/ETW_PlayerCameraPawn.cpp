@@ -6,7 +6,7 @@
 #include "MassAIBehaviorTypes.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
-#include "Mass/MassCommanderComponent.h"
+#include "Mass/Commander/MassCommanderComponent.h"
 
 FName AETW_PlayerCameraPawn::MassCommanderComponentName(TEXT("MassCommanderComp"));
 

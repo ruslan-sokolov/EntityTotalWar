@@ -13,11 +13,35 @@
 
 FCollisionQueryParams FMassSurfaceMovementParams::DefaultCollisionQueryParams(SCENE_QUERY_STAT(STAT_SurfaceMovementTrace), false);
 
+namespace MassSurfaceMovementConstants
+{
+	const float MAX_STEP_SIDE_Z = 0.08f;
+	const float VERTICAL_SLOPE_NORMAL_Z = 0.001f;
+
+	/** Minimum delta time considered when ticking. Delta times below this are not considered. This is a very small non-zero value to avoid potential divide-by-zero in simulation code. */
+	const float MIN_TICK_TIME = 1e-6f;
+
+	/** Minimum acceptable distance for Character capsule to float above floor when walking. */
+	const float MIN_FLOOR_DIST = 1.9f;
+
+	/** Maximum acceptable distance for Character capsule to float above floor when walking. */
+	const float MAX_FLOOR_DIST = 2.4f;
+
+	/** Reject sweep impacts that are this close to the edge of the vertical portion of the capsule when performing vertical sweeps, and try again with a smaller capsule. */
+	const float SWEEP_EDGE_REJECT_DISTANCE = 0.15f;
+
+	/** Stop completely when braking and velocity magnitude is lower than this. */
+	const float BRAKE_TO_STOP_VELOCITY = 10.f;
+
+	const float PENETRATION_PULLBACK_DISTANCE = 0.125f;
+
+	const float PENETRATION_OVERLAP_INFLATION = 0.100f;
+}
 
 void UMassSurfaceMovementTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const
 {
 	BuildContext.AddFragment<FMassVelocityFragment>();
-	BuildContext.AddFragment<FMassForceFragment>();
+	//BuildContext.AddFragment<FMassForceFragment>();
 	BuildContext.RequireFragment<FAgentRadiusFragment>();
 	BuildContext.RequireFragment<FTransformFragment>();
 
@@ -43,7 +67,7 @@ UMassApplySurfaceMovementProcessor::UMassApplySurfaceMovementProcessor()
 void UMassApplySurfaceMovementProcessor::ConfigureQueries()
 {
 	EntityQuery.AddRequirement<FMassVelocityFragment>(EMassFragmentAccess::ReadWrite);
-	EntityQuery.AddRequirement<FMassForceFragment>(EMassFragmentAccess::ReadOnly);
+	//EntityQuery.AddRequirement<FMassForceFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadWrite);
 
 	EntityQuery.AddRequirement<FAgentRadiusFragment>(EMassFragmentAccess::ReadOnly);
@@ -68,7 +92,7 @@ void UMassApplySurfaceMovementProcessor::Execute(FMassEntityManager& EntityManag
 		const FMassSurfaceMovementParams& SurfaceMovementParams = Context.GetConstSharedFragment<FMassSurfaceMovementParams>();
 	
 		const TArrayView<FMassVelocityFragment> VelocitiesList = Context.GetMutableFragmentView<FMassVelocityFragment>();
-		const TArrayView<FMassForceFragment> ForcesList = Context.GetMutableFragmentView<FMassForceFragment>();
+		//const TArrayView<FMassForceFragment> ForcesList = Context.GetMutableFragmentView<FMassForceFragment>();
 		const TArrayView<FTransformFragment> TransformList = Context.GetMutableFragmentView<FTransformFragment>();
 
 		const TConstArrayView<FAgentRadiusFragment> RadiusList = Context.GetFragmentView<FAgentRadiusFragment>();
@@ -78,37 +102,40 @@ void UMassApplySurfaceMovementProcessor::Execute(FMassEntityManager& EntityManag
 		for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
 		{
 			SCOPE_CYCLE_COUNTER(STAT_SurfaceMovement);
-			
-			const FVector& Force = ForcesList[EntityIndex].Value;
+
+			FVector& OutVelocity = VelocitiesList[EntityIndex].Value;
+			FVector Velocity = OutVelocity;  // copy velocity vector
+			//const FVector& Force = ForcesList[EntityIndex].Value;
 			const float Radius = RadiusList[EntityIndex].Radius;
 			FMassSurfaceMovementFragment& SurfaceMovementFrag = SurfaceMovementList[EntityIndex];
 			FTransform& Transform = TransformList[EntityIndex].GetMutableTransform();
-			FVector& OutVelocity = VelocitiesList[EntityIndex].Value;
-			FVector Velocity = OutVelocity;  // copy velocity vector
-
+			
 			FMassSurfaceMovementFloor NewFloor;
 			bool bFloorUpdated = false;
-			
+
+			FVector CurrentLocation = Transform.GetLocation();
+
+			DrawDebugSphere(World, CurrentLocation, Radius, 12, FColor::Red, false, 0);
 			// impact velocity from forces
-			Velocity += Force * DeltaTime;
+			//Velocity += Force * DeltaTime;
 			// keep velocity horizontal
-			Velocity.Z = 0.f; 
+			Velocity.Z = 0.f;
 
 			float LastMoveTimeSlice = DeltaTime;
 
 			const FVector Delta = Velocity * DeltaTime;
 			FVector RampDelta = SurfaceMovementFrag.ComputeGroundMovementDelta(Delta);
 
-			FVector CurrentLocation = Transform.GetLocation();
-
+			//DrawDebugLine(World, SurfaceMovementFrag.Floor.TempDbgSurfaceLocation, SurfaceMovementFrag.Floor.TempDbgSurfaceLocation + SurfaceMovementFrag.Floor.SurfaceNormal * 200.f, FColor::Red, false, 0);
+			
 			// sweep
 			FHitResult Sweep(1.f);
-			SurfaceMovementParams.SweepAlongSurface(World, Radius, CurrentLocation, RampDelta, Sweep);  // TRACE COUNT 1
+			SurfaceMovementParams.SweepAlongSurfaceHandlePenetration(World, Radius, CurrentLocation, RampDelta, Sweep);  // TRACE COUNT 1
 			CurrentLocation = Sweep.bBlockingHit ? Sweep.Location : Sweep.TraceEnd;
 			
 			if (Sweep.bStartPenetrating)  // stuck in geometry DONE
 			{
-				SurfaceMovementParams.SlideAlongSurface(World, 1.f, Radius, CurrentLocation, Delta, SurfaceMovementFrag.Floor, Sweep);  // TRACE COUNT 3
+				SurfaceMovementParams.SlideAlongSurfaceResolvePenetration(World, 1.f, Radius, CurrentLocation, Delta, SurfaceMovementFrag, Sweep);  // TRACE COUNT 3
 				CurrentLocation = Sweep.bBlockingHit ? Sweep.Location : Sweep.TraceEnd;
 			}
 			else if (Sweep.bBlockingHit)  // can be hit wall or stairs up or ramp
@@ -121,7 +148,7 @@ void UMassApplySurfaceMovementProcessor::Execute(FMassEntityManager& EntityManag
 					const float InitialPercentRemaining = 1.f - PercentTimeApplied;
 					RampDelta = SurfaceMovementFrag.ComputeGroundMovementDelta(Delta * InitialPercentRemaining);
 					LastMoveTimeSlice = InitialPercentRemaining * LastMoveTimeSlice;
-					SurfaceMovementParams.SweepAlongSurface(World, Radius, CurrentLocation, RampDelta, Sweep);  // TRACE COUNT 2
+					SurfaceMovementParams.SweepAlongSurfaceHandlePenetration(World, Radius, CurrentLocation, RampDelta, Sweep);  // TRACE COUNT 2
 					CurrentLocation = Sweep.bBlockingHit ? Sweep.Location : Sweep.TraceEnd;
 
 					const float SecondHitPercent = Sweep.Time * InitialPercentRemaining;
@@ -133,10 +160,10 @@ void UMassApplySurfaceMovementProcessor::Execute(FMassEntityManager& EntityManag
 					// hit a barrier, try to step up
 					const FVector PreStepUpLocation = CurrentLocation;
 
-					const bool SteppedUp = SurfaceMovementParams.StepUp(World, Radius, CurrentLocation, Delta * (1.f - PercentTimeApplied), SurfaceMovementFrag.Floor, Sweep, NewFloor);
+					const bool SteppedUp = SurfaceMovementParams.StepUp(World, Radius, CurrentLocation, Delta * (1.f - PercentTimeApplied), SurfaceMovementFrag, Sweep, NewFloor);
 					if (!SteppedUp)
 					{
-						SurfaceMovementParams.SlideAlongSurface(World, 1.f - PercentTimeApplied, Radius, CurrentLocation, Delta, SurfaceMovementFrag.Floor, Sweep);
+						SurfaceMovementParams.SlideAlongSurface(World, 1.f - PercentTimeApplied, Radius, CurrentLocation, Delta, SurfaceMovementFrag, Sweep);
 						CurrentLocation = Sweep.bBlockingHit ? Sweep.Location : Sweep.TraceEnd;
 					}
 					else
@@ -194,7 +221,7 @@ void UMassApplySurfaceMovementInitializer::Register()
 void UMassApplySurfaceMovementInitializer::ConfigureQueries()
 {
 	EntityQuery.AddRequirement<FMassSurfaceMovementFragment>(EMassFragmentAccess::ReadWrite);
-	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
+	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FAgentRadiusFragment>(EMassFragmentAccess::ReadOnly);
 	EntityQuery.AddConstSharedRequirement<FMassSurfaceMovementParams>();
 }
@@ -206,47 +233,145 @@ void UMassApplySurfaceMovementInitializer::Execute(FMassEntityManager& EntityMan
 	EntityQuery.ForEachEntityChunk(EntityManager, Context, [World](FMassExecutionContext Context)
 	{
 		const TArrayView<FMassSurfaceMovementFragment> SurfaceMovementList = Context.GetMutableFragmentView<FMassSurfaceMovementFragment>();
-		const TConstArrayView<FTransformFragment> TransformList = Context.GetFragmentView<FTransformFragment>();
+		const TArrayView<FTransformFragment> TransformList = Context.GetMutableFragmentView<FTransformFragment>();
 		const TConstArrayView<FAgentRadiusFragment> RadiusList = Context.GetFragmentView<FAgentRadiusFragment>();
 		const FMassSurfaceMovementParams& SurfaceMovementParams = Context.GetConstSharedFragment<FMassSurfaceMovementParams>();
 
 		for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
 		{
-			const FVector& AgentLocation = TransformList[EntityIndex].GetTransform().GetLocation();
+			FTransform& Transform = TransformList[EntityIndex].GetMutableTransform();
+			FVector AgentLocation = Transform.GetLocation();
 			const float AgentRadius = RadiusList[EntityIndex].Radius;
+			AgentLocation.Z += AgentRadius;
+			Transform.SetTranslation(AgentLocation);
 			FMassSurfaceMovementFragment& SurfaceMovementFragment = SurfaceMovementList[EntityIndex];
+			SurfaceMovementFragment.MovementMode = ESurfaceMovementMode::Walking;
+
+			DrawDebugSphere(World, AgentLocation, AgentRadius, 8, FColor::Yellow, false, 10.f);
 			
 			SurfaceMovementParams.FindFloor(World, AgentLocation, AgentRadius, SurfaceMovementFragment.Floor);
 		}
 	});
 }
 
+void FMassSurfaceMovementParams::FindFloor(const UWorld* World, const FVector& AgentLocation, float AgentRadius,
+                                           FMassSurfaceMovementFloor& OutFloor, ESurfaceMovementMode MovementMode) const
+{
+	// Increase height check slightly if walking, to prevent floor height adjustment from later invalidating the floor result.
+	const float HeightCheckAdjust = (MovementMode == ESurfaceMovementMode::Walking ? MAX_FLOOR_DIST + UE_KINDA_SMALL_NUMBER : -MAX_FLOOR_DIST);
+	float FloorSweepTraceDist = FMath::Max(MAX_FLOOR_DIST, StepHeight + HeightCheckAdjust);
+
+	OutFloor.Clear();
+	
+	// Sweep floor
+	if (FloorSweepTraceDist > 0.f)
+	{
+
+		// Use a shorter height to avoid sweeps giving weird results if we start on a surface.
+		// This also allows us to adjust out of penetrations.
+		const float ShrinkScale = 0.9f;
+		float ShrinkHeight = (AgentRadius * 0.5f) * (1.f - ShrinkScale);
+		float TraceDist = FloorSweepTraceDist + ShrinkHeight;
+
+		FCollisionShape TraceSphere;
+		TraceSphere.SetSphere(AgentRadius);
+		
+		FHitResult Hit(1.f);
+		bool bBlockingHit = World->SweepSingleByChannel(Hit, AgentLocation, AgentLocation + FVector(0.f,0.f,-TraceDist), FQuat::Identity, CollisionChannel, TraceSphere, CollisionQueryParams);
+
+		if (bBlockingHit)
+		{
+			// Reject hits adjacent to us, we only care about hits on the bottom portion of our capsule.
+			// Check 2D distance to impact point, reject if within a tolerance from radius.
+			if (Hit.bStartPenetrating || !IsWithinEdgeTolerance(AgentLocation, Hit.ImpactPoint, AgentRadius))
+			{
+				// Use a capsule with a slightly smaller radius and shorter height to avoid the adjacent object.
+				// Capsule must not be nearly zero or the trace will fall back to a line trace from the start point and have the wrong length.
+				TraceSphere.Sphere.Radius = FMath::Max(0.f, AgentRadius - SWEEP_EDGE_REJECT_DISTANCE - UE_KINDA_SMALL_NUMBER);
+				if (!TraceSphere.IsNearlyZero())
+				{
+					Hit.Reset(1.f, false);
+
+					bBlockingHit = World->SweepSingleByChannel(Hit, AgentLocation, AgentLocation + FVector(0.f,0.f,-TraceDist), FQuat::Identity, CollisionChannel, TraceSphere, CollisionQueryParams);
+				}
+			}
+
+			// Reduce hit distance by ShrinkHeight because we shrank the capsule for the trace.
+			// We allow negative distances here, because this allows us to pull out of penetrations.
+			const float MaxPenetrationAdjust = FMath::Max(MAX_FLOOR_DIST, AgentRadius);
+			const float SweepResult = FMath::Max(-MaxPenetrationAdjust, Hit.Time * TraceDist - ShrinkHeight);
+
+			OutFloor.SetFromSweep(Hit, SweepResult, false);
+			if (Hit.IsValidBlockingHit() && SurfaceIsWalkable(Hit))
+			{		
+				if (SweepResult <= FloorSweepTraceDist)
+				{
+					// Hit within test distance.
+					OutFloor.bHasFloor = true;
+				}
+			}
+		}
+	}
+}
 
 float FMassSurfaceMovementParams::SlideAlongSurface(const UWorld* World, float Time, float AgentRadius,
-const FVector& AgentLocation, const FVector& Delta, const FMassSurfaceMovementFloor& Floor,
-	FHitResult& OutHit) const
+                                                    const FVector& AgentLocation, const FVector& Delta, const FMassSurfaceMovementFragment& SurfaceMovementFragment,
+                                                    FHitResult& OutHit) const
 {
-	float PercentTimeApplied = 0.f;
+	if (!OutHit.bBlockingHit)
+	{
+		return 0.f;
+	}
+
+	const FMassSurfaceMovementFloor& CurrentFloor = SurfaceMovementFragment.Floor;
 	
-	const FVector OldHitNormal = OutHit.Normal;
-	FVector SlideDelta = ComputeSlideDelta(Delta, Time, OutHit.Normal, Floor, AgentRadius);
+	FVector Normal(OutHit.ImpactNormal);
+	if (SurfaceMovementFragment.MovementMode == ESurfaceMovementMode::Walking)
+	{
+		// We don't want to be pushed up an unwalkable surface.
+		if (Normal.Z > 0.f)
+		{
+			if (!SurfaceIsWalkable(OutHit))
+			{
+				Normal = Normal.GetSafeNormal2D();
+			}
+		}
+		else if (Normal.Z < -UE_KINDA_SMALL_NUMBER)
+		{
+			// Don't push down into the floor when the impact is on the upper portion of the capsule.
+			if (CurrentFloor.GetSurfaceDistance() < MIN_FLOOR_DIST && CurrentFloor.bHasSurface())
+			{
+				const FVector FloorNormal = CurrentFloor.SurfaceNormal;
+				const bool bFloorOpposedToMovement = (Delta | FloorNormal) < 0.f && (FloorNormal.Z < 1.f - UE_DELTA);
+				if (bFloorOpposedToMovement)
+				{
+					Normal = FloorNormal;
+				}
+				
+				Normal = Normal.GetSafeNormal2D();
+			}
+		}
+	}
+	
+	const FVector OldHitNormal = Normal;
+	FVector SlideDelta = ComputeSlideDelta(Delta, Time, Normal, CurrentFloor, AgentRadius);
 	if ((SlideDelta | Delta) > 0.f)
 	{
-		SweepAlongSurface(World, AgentRadius, AgentLocation, SlideDelta, OutHit);
-
+		SweepAlongSurfaceHandlePenetration(World, AgentRadius, AgentLocation, SlideDelta, OutHit);  // todo safe move resolve penetr
+		
 		const float FirstHitPercent = OutHit.Time;
-		PercentTimeApplied = FirstHitPercent;
+		float PercentTimeApplied = FirstHitPercent;
 		
 		if (OutHit.IsValidBlockingHit())
 		{
 			// Compute new slide normal when hitting multiple surfaces.
-			TwoWallAdjust(SlideDelta, OutHit, OldHitNormal, Floor, AgentRadius);
+			TwoWallAdjust(SlideDelta, OutHit, OldHitNormal, CurrentFloor, AgentRadius);
 
 			// Only proceed if the new direction is of significant length and not in reverse of original attempted move.
 			if (!SlideDelta.IsNearlyZero(1e-3f) && (SlideDelta | Delta) > 0.f)
 			{
 				// Perform second move
-				SweepAlongSurface(World, AgentRadius, OutHit.Location, SlideDelta, OutHit);
+				SweepAlongSurfaceHandlePenetration(World, AgentRadius, OutHit.Location, SlideDelta, OutHit);  // todo save move resolve penetr
 				const float SecondHitPercent = OutHit.Time * (1.f - FirstHitPercent);
 				PercentTimeApplied += SecondHitPercent;
 			}
@@ -258,8 +383,113 @@ const FVector& AgentLocation, const FVector& Delta, const FMassSurfaceMovementFl
 	return 0.f;
 }
 
+float FMassSurfaceMovementParams::SlideAlongSurfaceResolvePenetration(const UWorld* World, const float Time,
+	const float AgentRadius, const FVector& AgentLocation, const FVector& Delta,
+	const FMassSurfaceMovementFragment& SurfaceMovementFragment, FHitResult& OutHit) const
+{
+		if (!OutHit.bBlockingHit)
+	{
+		return 0.f;
+	}
+
+	const FMassSurfaceMovementFloor& CurrentFloor = SurfaceMovementFragment.Floor;
+	
+	FVector Normal(OutHit.ImpactNormal);
+	if (SurfaceMovementFragment.MovementMode == ESurfaceMovementMode::Walking)
+	{
+		// We don't want to be pushed up an unwalkable surface.
+		if (Normal.Z > 0.f)
+		{
+			if (!SurfaceIsWalkable(OutHit))
+			{
+				Normal = Normal.GetSafeNormal2D();
+			}
+		}
+		else if (Normal.Z < -UE_KINDA_SMALL_NUMBER)
+		{
+			// Don't push down into the floor when the impact is on the upper portion of the capsule.
+			if (CurrentFloor.GetSurfaceDistance() < MIN_FLOOR_DIST && CurrentFloor.bHasSurface())
+			{
+				const FVector FloorNormal = CurrentFloor.SurfaceNormal;
+				const bool bFloorOpposedToMovement = (Delta | FloorNormal) < 0.f && (FloorNormal.Z < 1.f - UE_DELTA);
+				if (bFloorOpposedToMovement)
+				{
+					Normal = FloorNormal;
+				}
+				
+				Normal = Normal.GetSafeNormal2D();
+			}
+		}
+	}
+	
+	const FVector OldHitNormal = Normal;
+	FVector SlideDelta = ComputeSlideDelta(Delta, Time, Normal, CurrentFloor, AgentRadius);
+	if ((SlideDelta | Delta) > 0.f)
+	{
+		SweepAlongSurfaceHandlePenetration(World, AgentRadius, AgentLocation, SlideDelta, OutHit);  // todo safe move resolve penetr
+		
+		const float FirstHitPercent = OutHit.Time;
+		float PercentTimeApplied = FirstHitPercent;
+		
+		if (OutHit.IsValidBlockingHit())
+		{
+			// Compute new slide normal when hitting multiple surfaces.
+			TwoWallAdjust(SlideDelta, OutHit, OldHitNormal, CurrentFloor, AgentRadius);
+
+			// Only proceed if the new direction is of significant length and not in reverse of original attempted move.
+			if (!SlideDelta.IsNearlyZero(1e-3f) && (SlideDelta | Delta) > 0.f)
+			{
+				// Perform second move
+				SweepAlongSurfaceHandlePenetration(World, AgentRadius, OutHit.Location, SlideDelta, OutHit);  // todo save move resolve penetr
+				const float SecondHitPercent = OutHit.Time * (1.f - FirstHitPercent);
+				PercentTimeApplied += SecondHitPercent;
+			}
+		}
+
+		return FMath::Clamp(PercentTimeApplied, 0.f, 1.f);
+	}
+
+	return 0.f;
+}
+
+void FMassSurfaceMovementParams::TwoWallAdjust(FVector& OutDelta, const FHitResult& Hit, const FVector& OldHitNormal,
+                                               const FMassSurfaceMovementFloor& Floor, float AgentRadius) const
+{
+	FVector Delta = OutDelta;
+	const FVector HitNormal = Hit.Normal;
+
+	if ((OldHitNormal | HitNormal) <= 0.f) //90 or less corner, so use cross product for direction
+	{
+		const FVector DesiredDir = Delta;
+		FVector NewDir = (HitNormal ^ OldHitNormal);
+		NewDir = NewDir.GetSafeNormal();
+		Delta = (Delta | NewDir) * (1.f - Hit.Time) * NewDir;
+		if ((DesiredDir | Delta) < 0.f)
+		{
+			Delta = -1.f * Delta;
+		}
+	}
+	else //adjust to new wall
+	{
+		const FVector DesiredDir = Delta;
+		Delta = ComputeSlideDelta(Delta, 1.f - Hit.Time, HitNormal, Floor, AgentRadius);
+		if ((Delta | DesiredDir) <= 0.f)
+		{
+			Delta = FVector::ZeroVector;
+		}
+		else if ( FMath::Abs((HitNormal | OldHitNormal) - 1.f) < UE_KINDA_SMALL_NUMBER )
+		{
+			// we hit the same wall again even after adjusting to move along it the first time
+			// nudge away from it (this can happen due to precision issues)
+			Delta += HitNormal * 0.01f;
+		}
+	}
+
+	OutDelta = Delta;
+}
+
 bool FMassSurfaceMovementParams::StepUp(const UWorld* World, const float AgentRadius, const FVector& AgentLocation,
-                                        const FVector& Delta, const FMassSurfaceMovementFloor& Floor, FHitResult& OutHit,
+                                        const FVector& Delta, const FMassSurfaceMovementFragment& SurfaceMovementFragment, FHitResult& OutHit,
                                         FMassSurfaceMovementFloor& OutFloor) const
 {
 	if (StepHeight <= 0.f)
@@ -285,10 +515,10 @@ bool FMassSurfaceMovementParams::StepUp(const UWorld* World, const float AgentRa
 	float PawnInitialFloorBaseZ = OldLocation.Z - HalfRadius;
 	float PawnFloorPointZ = PawnInitialFloorBaseZ;
 
-	if (Floor.bHasSurface())
+	if (SurfaceMovementFragment.Floor.bHasSurface())
 	{
 		// Since we float a variable amount off the floor, we need to enforce max step height off the actual point of impact with the floor.
-		const float FloorDist = FMath::Max(0.f, Floor.GetAbsoluteDistance());
+		const float FloorDist = FMath::Max(0.f, SurfaceMovementFragment.Floor.GetSurfaceDistance());
 		PawnInitialFloorBaseZ -= FloorDist;
 		StepTravelUpHeight = FMath::Max(StepTravelUpHeight - FloorDist, 0.f);
 		StepTravelDownHeight = (StepHeight + MaxFloorTraceDist * 2.f);
@@ -296,12 +526,12 @@ bool FMassSurfaceMovementParams::StepUp(const UWorld* World, const float AgentRa
 		const bool bHitVerticalFace = !IsWithinEdgeTolerance(OutHit.Location, OutHit.ImpactPoint, AgentRadius);
 		if (!bHitVerticalFace)
 		{
-			PawnFloorPointZ = Floor.SurfaceNormal.Z;
+			PawnFloorPointZ = SurfaceMovementFragment.Floor.SurfaceNormal.Z;
 		}
 		else
 		{
 			// Base floor point is the base of the capsule moved down by how far we are hovering over the surface we are hitting.
-			PawnFloorPointZ -= Floor.GetAbsoluteDistance();
+			PawnFloorPointZ -= SurfaceMovementFragment.Floor.GetSurfaceDistance();
 		}
 	}
 
@@ -313,7 +543,7 @@ bool FMassSurfaceMovementParams::StepUp(const UWorld* World, const float AgentRa
 
 	// step up - treat as vertical wall
 	FHitResult SweepUpHit(1.f);
-	SweepAlongSurface(World, AgentRadius, AgentLocation, -GravDir * StepTravelUpHeight, SweepUpHit);
+	SweepAlongSurfaceHandlePenetration(World, AgentRadius, AgentLocation, -GravDir * StepTravelUpHeight, SweepUpHit);
 	FVector NewLocation = SweepUpHit.bBlockingHit ? SweepUpHit.Location : SweepUpHit.TraceEnd;
 
 	if (SweepUpHit.bStartPenetrating)
@@ -323,7 +553,7 @@ bool FMassSurfaceMovementParams::StepUp(const UWorld* World, const float AgentRa
 
 	// step fwd
 	FHitResult Hit(1.f);
-	SweepAlongSurface(World, AgentRadius, NewLocation, -GravDir * StepTravelUpHeight, Hit);
+	SweepAlongSurfaceHandlePenetration(World, AgentRadius, NewLocation, -GravDir * StepTravelUpHeight, Hit);
 	NewLocation = Hit.bBlockingHit ? Hit.Location : Hit.TraceEnd;
 
 	// Check result of forward movement
@@ -336,7 +566,7 @@ bool FMassSurfaceMovementParams::StepUp(const UWorld* World, const float AgentRa
 
 		// adjust and try again
 		const float ForwardHitTime = Hit.Time;
-		const float ForwardSlideAmount = SlideAlongSurface(World, 1.f - Hit.Time, AgentRadius, NewLocation, Delta, Floor, Hit);
+		const float ForwardSlideAmount = SlideAlongSurface(World, 1.f - Hit.Time, AgentRadius, NewLocation, Delta, SurfaceMovementFragment, Hit);
 		NewLocation = Hit.bBlockingHit ? Hit.Location : Hit.TraceEnd;
 		
 		// If both the forward hit and the deflection got us nowhere, there is no point in this step up.
@@ -347,7 +577,7 @@ bool FMassSurfaceMovementParams::StepUp(const UWorld* World, const float AgentRa
 	}
 	
 	// Step down
-	SweepAlongSurface(World, AgentRadius, NewLocation, GravDir * StepTravelDownHeight, Hit);
+	SweepAlongSurfaceHandlePenetration(World, AgentRadius, NewLocation, GravDir * StepTravelDownHeight, Hit);
 	NewLocation = Hit.bBlockingHit ? Hit.Location : Hit.TraceEnd;
 	
 	// If step down was initially penetrating abort the step up
@@ -407,7 +637,7 @@ bool FMassSurfaceMovementParams::StepUp(const UWorld* World, const float AgentRa
 		{
 			// We should reject the floor result if we are trying to step up an actual step where we are not able to perch (this is rare).
 			// In those cases we should instead abort the step up and try to slide along the stair.
-			if (!OutFloor.bHasSurface() && StepSideZ < 0.08f)
+			if (!OutFloor.bHasSurface() && StepSideZ < MAX_STEP_SIDE_Z)
 			{
 				return false;
 			}

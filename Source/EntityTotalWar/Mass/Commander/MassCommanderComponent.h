@@ -25,6 +25,9 @@ public:
 	// Sets default values for this component's properties
 	UMassCommanderComponent();
 
+	UFUNCTION(BlueprintCallable)
+	const FVector& GetCommandLocation() const { return LastCommandUnitResult.Location; }
+
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
