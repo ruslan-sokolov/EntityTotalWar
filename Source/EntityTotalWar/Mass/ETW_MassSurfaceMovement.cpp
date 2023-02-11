@@ -115,7 +115,12 @@ void UMassApplySurfaceMovementProcessor::Execute(FMassEntityManager& EntityManag
 
 			FVector CurrentLocation = Transform.GetLocation();
 
-			DrawDebugSphere(World, CurrentLocation, Radius, 12, FColor::Red, false, 0);
+			DrawDebugSphere(World, CurrentLocation, Radius, 12, FColor::Red, false, 0.f);
+			FVector dbg_trace_end = CurrentLocation + SurfaceMovementFrag.Floor.SurfaceNormal * 300.f;
+			dbg_trace_end.Z -= Radius;
+			DrawDebugLine(World, CurrentLocation, dbg_trace_end, SurfaceMovementFrag.Floor.bHasSurface() ? FColor::Cyan : FColor::Red, false, 0);
+			FPlane Plane = FPlane(SurfaceMovementFrag.Floor.SurfaceNormal);
+			DrawDebugSolidPlane(World, Plane, CurrentLocation, Radius, SurfaceMovementFrag.Floor.bHasSurface() ? FColor::Blue : FColor::Red, false, 0.f);
 			// impact velocity from forces
 			//Velocity += Force * DeltaTime;
 			// keep velocity horizontal
@@ -261,7 +266,12 @@ void FMassSurfaceMovementParams::FindFloor(const UWorld* World, const FVector& A
 	const float HeightCheckAdjust = (MovementMode == ESurfaceMovementMode::Walking ? MAX_FLOOR_DIST + UE_KINDA_SMALL_NUMBER : -MAX_FLOOR_DIST);
 	float FloorSweepTraceDist = FMath::Max(MAX_FLOOR_DIST, StepHeight + HeightCheckAdjust);
 
+	// todo fix vertical floor
+	// todo fix has surface = false always
+	
 	OutFloor.Clear();
+
+	FHitResult Hit(1.f);
 	
 	// Sweep floor
 	if (FloorSweepTraceDist > 0.f)
@@ -270,14 +280,14 @@ void FMassSurfaceMovementParams::FindFloor(const UWorld* World, const FVector& A
 		// Use a shorter height to avoid sweeps giving weird results if we start on a surface.
 		// This also allows us to adjust out of penetrations.
 		const float ShrinkScale = 0.9f;
+		const float ShrinkScaleOverlap = 0.1f;
 		float ShrinkHeight = (AgentRadius * 0.5f) * (1.f - ShrinkScale);
 		float TraceDist = FloorSweepTraceDist + ShrinkHeight;
 
 		FCollisionShape TraceSphere;
 		TraceSphere.SetSphere(AgentRadius);
 		
-		FHitResult Hit(1.f);
-		bool bBlockingHit = World->SweepSingleByChannel(Hit, AgentLocation, AgentLocation + FVector(0.f,0.f,-TraceDist), FQuat::Identity, CollisionChannel, TraceSphere, CollisionQueryParams);
+		bool bBlockingHit = FloorSweepTest(World, Hit, AgentLocation, AgentLocation + FVector(0.f,0.f,-TraceDist), AgentRadius);
 
 		if (bBlockingHit)
 		{
@@ -290,9 +300,11 @@ void FMassSurfaceMovementParams::FindFloor(const UWorld* World, const FVector& A
 				TraceSphere.Sphere.Radius = FMath::Max(0.f, AgentRadius - SWEEP_EDGE_REJECT_DISTANCE - UE_KINDA_SMALL_NUMBER);
 				if (!TraceSphere.IsNearlyZero())
 				{
+					ShrinkHeight = (AgentRadius * 0.5f) * (1.f - ShrinkScaleOverlap);
+					TraceDist = FloorSweepTraceDist + ShrinkHeight;
 					Hit.Reset(1.f, false);
 
-					bBlockingHit = World->SweepSingleByChannel(Hit, AgentLocation, AgentLocation + FVector(0.f,0.f,-TraceDist), FQuat::Identity, CollisionChannel, TraceSphere, CollisionQueryParams);
+					bBlockingHit = FloorSweepTest(World, Hit, AgentLocation, AgentLocation + FVector(0.f,0.f,-TraceDist), AgentRadius);
 				}
 			}
 
@@ -308,10 +320,23 @@ void FMassSurfaceMovementParams::FindFloor(const UWorld* World, const FVector& A
 				{
 					// Hit within test distance.
 					OutFloor.bHasFloor = true;
+					return;
 				}
 			}
 		}
 	}
+
+	// Since we require a longer sweep than line trace, we don't want to run the line trace if the sweep missed everything.
+	// We do however want to try a line trace if the sweep was stuck in penetration.
+	if (!Hit.bBlockingHit && !Hit.bStartPenetrating)
+	{
+		OutFloor.SurfaceDistance = FloorSweepTraceDist;
+		return;
+	}
+
+	// No hits were acceptable.
+	OutFloor.bHasFloor = false;
+
 }
 
 float FMassSurfaceMovementParams::SlideAlongSurface(const UWorld* World, float Time, float AgentRadius,
@@ -387,7 +412,7 @@ float FMassSurfaceMovementParams::SlideAlongSurfaceResolvePenetration(const UWor
 	const float AgentRadius, const FVector& AgentLocation, const FVector& Delta,
 	const FMassSurfaceMovementFragment& SurfaceMovementFragment, FHitResult& OutHit) const
 {
-		if (!OutHit.bBlockingHit)
+	if (!OutHit.bBlockingHit)
 	{
 		return 0.f;
 	}

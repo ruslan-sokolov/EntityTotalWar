@@ -132,6 +132,25 @@ struct ENTITYTOTALWAR_API FMassSurfaceMovementParams : public FMassSharedFragmen
 		
 		return World->SweepSingleByChannel(OutHit, AgentLocation, AgentLocation + Delta, FQuat::Identity, CollisionChannel, TraceSphere, CollisionQueryParams);
 	}
+
+	bool FloorSweepTest(const UWorld* World, FHitResult& OutHit, const FVector& Start, const FVector& End, const float AgentRadius) const
+	{
+		bool bBlockingHit = false;
+
+		const FCollisionShape BoxShape = FCollisionShape::MakeBox(FVector(AgentRadius * 0.707f));
+
+		// First test with the box rotated so the corners are along the major axes (ie rotated 45 degrees).
+		bBlockingHit = World->SweepSingleByChannel(OutHit, Start, End, FQuat(FVector(0.f, 0.f, -1.f), UE_PI * 0.25f), CollisionChannel, BoxShape, CollisionQueryParams);
+
+		if (!bBlockingHit)
+		{
+			// Test again with the same box, not rotated.
+			OutHit.Reset(1.f, false);
+			bBlockingHit = World->SweepSingleByChannel(OutHit, Start, End, FQuat::Identity, CollisionChannel, BoxShape, CollisionQueryParams);
+		}
+
+		return bBlockingHit;
+	}
 	
 	bool ResolvePenetration(const UWorld* World, const FHitResult& Hit, const float AgentRadius, FVector& OutAdjustedLocation) const
 	{
