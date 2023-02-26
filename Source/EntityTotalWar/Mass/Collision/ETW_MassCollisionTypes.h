@@ -33,7 +33,7 @@ struct ENTITYTOTALWAR_API FETW_MassCopsuleFragment final : public FMassFragment
 
 	void SetCapsuleComponent(UCapsuleComponent* Capsule) { CapsuleComponent = Capsule; }
 	
-	UCapsuleComponent* GetMutableCapsuleComponent() { return CapsuleComponent; }
+	UCapsuleComponent* GetMutableCapsuleComponent() const { return CapsuleComponent; }
 	UCapsuleComponent* const GetCapsuleComponent() const { return CapsuleComponent; }
 	
 	
