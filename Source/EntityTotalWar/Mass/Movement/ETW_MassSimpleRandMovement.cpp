@@ -7,7 +7,7 @@
 #include "MassCommonFragments.h"
 #include "MassEntitySubsystem.h"
 #include "MassSimulationLOD.h"
-#include "Common/Fragments/ETW_MassFragments.h"
+#include "Mass/Common/Fragments/ETW_MassFragments.h"
 
 
 void UMassSimpleRandMovementTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const

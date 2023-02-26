@@ -11,36 +11,12 @@
 #include "MassSimulationLOD.h"
 #include "MassCommandBuffer.h"
 #include "MassObserverRegistry.h"
-#include "Collision/ETW_MassCollisionTypes.h"
+#include "Mass/Collision/ETW_MassCollisionTypes.h"
 #include "Engine/ScopedMovementUpdate.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Math/UnitConversion.h"
 #include "Math/UnrealMathUtility.h"
-
-namespace MassSurfaceMovementConstants
-{
-	const float MAX_STEP_SIDE_Z = 0.08f;
-	const float VERTICAL_SLOPE_NORMAL_Z = 0.001f;
-
-	/** Minimum delta time considered when ticking. Delta times below this are not considered. This is a very small non-zero value to avoid potential divide-by-zero in simulation code. */
-	const float MIN_TICK_TIME = 1e-6f;
-
-	/** Minimum acceptable distance for Character capsule to float above floor when walking. */
-	const float MIN_FLOOR_DIST = 1.9f;
-
-	/** Maximum acceptable distance for Character capsule to float above floor when walking. */
-	const float MAX_FLOOR_DIST = 2.4f;
-
-	/** Reject sweep impacts that are this close to the edge of the vertical portion of the capsule when performing vertical sweeps, and try again with a smaller capsule. */
-	const float SWEEP_EDGE_REJECT_DISTANCE = 0.15f;
-
-	/** Stop completely when braking and velocity magnitude is lower than this. */
-	const float BRAKE_TO_STOP_VELOCITY = 10.f;
-
-	const float PENETRATION_PULLBACK_DISTANCE = 0.125f;
-
-	const float PENETRATION_OVERLAP_INFLATION = 0.100f;
-}
+#include "BodyInstanceCore.h"
 
 
 void UMassSurfaceMovementTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const
@@ -123,19 +99,17 @@ UMassApplySurfaceMovementProcessor::UMassApplySurfaceMovementProcessor()
 
 void UMassApplySurfaceMovementProcessor::ConfigureQueries()
 {
-	EntityQuery.AddRequirement<FMassVelocityFragment>(EMassFragmentAccess::ReadWrite);
-	//EntityQuery.AddRequirement<FMassForceFragment>(EMassFragmentAccess::ReadOnly);
-	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadWrite);
-
-	EntityQuery.AddRequirement<FETW_MassCopsuleFragment>(EMassFragmentAccess::ReadWrite);
-
-	EntityQuery.AddRequirement<FMassSurfaceMovementFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddTagRequirement<FMassSurfaceMovementTag>(EMassFragmentPresence::All);
+	EntityQuery.AddTagRequirement<FMassOffLODTag>(EMassFragmentPresence::None);
+
+	EntityQuery.AddRequirement<FMassVelocityFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FMassForceFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FETW_MassCopsuleFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FMassSurfaceMovementFragment>(EMassFragmentAccess::ReadWrite);
 
 	EntityQuery.AddConstSharedRequirement<FMassSurfaceMovementParams>(EMassFragmentPresence::All);
 	EntityQuery.AddConstSharedRequirement<FETW_MassCapsuleCollisionParams>(EMassFragmentPresence::All);
-
-	EntityQuery.AddTagRequirement<FMassOffLODTag>(EMassFragmentPresence::None);
 }
 
 void UMassApplySurfaceMovementProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
@@ -207,7 +181,7 @@ bool UMassApplySurfaceMovementProcessor::SafeMoveUpdatedComponent(FETW_MassCopsu
 	{
 		// Conditionally ignore blocking overlaps (based on CVar)
 		const EMoveComponentFlags IncludeBlockingOverlapsWithoutEvents = (MOVECOMP_NeverIgnoreBlockingOverlaps | MOVECOMP_DisableBlockingOverlapDispatch);
-		TGuardValue<EMoveComponentFlags> ScopedFlagRestore(MoveComponentFlags, MovementComponentCVars::MoveIgnoreFirstBlockingOverlap ? MoveComponentFlags : (MoveComponentFlags | IncludeBlockingOverlapsWithoutEvents));
+		TGuardValue<EMoveComponentFlags> ScopedFlagRestore(MoveComponentFlags, MOVE_IGNORE_FIRST_BLOCKING_OVERLAP ? MoveComponentFlags : (MoveComponentFlags | IncludeBlockingOverlapsWithoutEvents));
 		bMoveResult = MoveUpdatedComponent(CapsuleFrag, MoveFrag, Delta, NewRotation, bSweep, &OutHit, Teleport);
 	}
 
@@ -236,7 +210,7 @@ bool UMassApplySurfaceMovementProcessor::ResolvePenetration(FETW_MassCopsuleFrag
 		
 		// We really want to make sure that precision differences or differences between the overlap test and sweep tests don't put us into another overlap,
 		// so make the overlap test a bit more restrictive.
-		const float OverlapInflation = MovementComponentCVars::PenetrationOverlapCheckInflation;
+		constexpr float OverlapInflation = PENETRATION_OVERLAP_INFLATION;
 		bool bEncroached = OverlapTest(CapsuleFrag, Hit.TraceStart + Adjustment, NewRotationQuat, UpdatedPrimitive->GetCollisionObjectType(), UpdatedPrimitive->GetCollisionShape(OverlapInflation));
 		if (!bEncroached)
 		{
@@ -705,7 +679,7 @@ bool UMassApplySurfaceMovementProcessor::StepUp(FETW_MassCopsuleFragment& Capsul
 			{
 				// We should reject the floor result if we are trying to step up an actual step where we are not able to perch (this is rare).
 				// In those cases we should instead abort the step up and try to slide along the stair.
-				if (!StepDownResult.FloorResult.bBlockingHit && StepSideZ < CharacterMovementConstants::MAX_STEP_SIDE_Z)
+				if (!StepDownResult.FloorResult.bBlockingHit && StepSideZ < MAX_STEP_SIDE_Z)
 				{
 					ScopedStepUpMovement.RevertMove();
 					return false;
@@ -1390,7 +1364,7 @@ void UMassApplySurfaceMovementProcessor::OnMovementModeChanged(FMassVelocityFrag
 	//	}
 	//}
 
-	OnMovementModeChanged(VelocityFrag, CapsuleFrag, MoveFrag, MoveParams, PreviousMovementMode);
+	//CharacterOwner->OnMovementModeChanged(PreviousMovementMode, PreviousCustomMode);
 	// ensureMsgf(GroundMovementMode == MOVE_Walking || GroundMovementMode == MOVE_NavWalking, TEXT("Invalid GroundMovementMode %d. MovementMode: %d, PreviousMovementMode: %d"), GroundMovementMode.GetValue(), MovementMode.GetValue(), PreviousMovementMode);
 
 }
@@ -2061,7 +2035,7 @@ void UMassApplySurfaceMovementProcessor::PhysFalling(FMassVelocityFragment& Velo
 
 	// See if we need to sub-step to exactly reach the apex. This is important for avoiding "cutting off the top" of the trajectory as framerate varies.
 	//if (CharacterMovementCVars::ForceJumpPeakSubstep && OldVelocityWithRootMotion.Z > 0.f && Velocity.Z <= 0.f && NumJumpApexAttempts < MaxJumpApexAttemptsPerSimulation)
-	if (CharacterMovementCVars::ForceJumpPeakSubstep && OldVelocityWithRootMotion.Z > 0.f && Velocity.Z <= 0.f)
+	if (FORCE_JUMP_PEAK_SUBSTEP && OldVelocityWithRootMotion.Z > 0.f && Velocity.Z <= 0.f)
 	{
 		const FVector DerivedAccel = (Velocity - OldVelocityWithRootMotion) / TimeTick;
 		if (!FMath::IsNearlyZero(DerivedAccel.Z))
@@ -2240,7 +2214,7 @@ void UMassApplySurfaceMovementProcessor::PhysFalling(FMassVelocityFragment& Velo
 					}
 
 					// Act as if there was no air control on the last move when computing new deflection.
-					if (bHasLimitedAirControl && Hit.Normal.Z > CharacterMovementConstants::VERTICAL_SLOPE_NORMAL_Z)
+					if (bHasLimitedAirControl && Hit.Normal.Z > VERTICAL_SLOPE_NORMAL_Z)
 					{
 						const FVector LastMoveNoAirControl = VelocityNoAirControl * LastMoveTimeSlice;
 						Delta = ComputeSlideVector(LastMoveNoAirControl, 1.f, OldHitNormal, Hit);

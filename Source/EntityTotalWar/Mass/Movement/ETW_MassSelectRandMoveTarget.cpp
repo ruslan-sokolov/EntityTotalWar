@@ -9,7 +9,7 @@
 #include "MassNavigationFragments.h"
 #include "MassObserverRegistry.h"
 #include "MassSimulationLOD.h"
-#include "Common/Fragments/ETW_MassFragments.h"
+#include "Mass/Common/Fragments/ETW_MassFragments.h"
 
 
 void UETW_MassSelectRandMoveTargetTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext,

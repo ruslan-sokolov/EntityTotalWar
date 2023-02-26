@@ -1,5 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+using System.IO;
 using UnrealBuildTool;
 
 public class EntityTotalWar : ModuleRules
@@ -8,7 +9,7 @@ public class EntityTotalWar : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "PhysicsCore"});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {"MassSpawner"});
 
@@ -57,5 +58,8 @@ public class EntityTotalWar : ModuleRules
 				
 			}
 		);
+		
+		PrivateIncludePaths.Add("EntityTotalWar/");
+		//PrivateIncludePaths.Add("EntityTotalWar/Mass/");
 	}
 }

@@ -6,13 +6,12 @@
 #include "MassCommonTypes.h"
 #include "MassEntityTraitBase.h"
 #include "MassProcessor.h"
-#include "MassEntityTypes.h"
 #include "MassObserverProcessor.h"
 #include "MassMovementFragments.h"
-#include "Collision/ETW_MassCollisionTypes.h"
+#include "Mass/Collision/ETW_MassCollisionTypes.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/Character.h"
-#include "GameFramework/MovementComponent.h"
+#include "ETW_MassSurfaceMovementTypes.h"
 
 #include "ETW_MassSurfaceMovement.generated.h"
 
@@ -33,270 +32,40 @@ DECLARE_CYCLE_STAT(TEXT("ETW Mass Surface Movement Find Floor"), STAT_SurfaceMov
 DECLARE_CYCLE_STAT(TEXT("ETW Mass Surface Movement Walking"), STAT_SurfaceMovementWalking, STATGROUP_ETWMass);
 DECLARE_CYCLE_STAT(TEXT("ETW Mass Surface Movement Adjust Floor"), STAT_SurfaceMovementCharAdjustFloorHeight, STATGROUP_ETWMass);
 DECLARE_CYCLE_STAT(TEXT("ETW Mass Surface Movement Process Landed"), STAT_SurfaceMovementCharProcessLanded, STATGROUP_ETWMass);
-//DECLARE_CYCLE_STAT(TEXT("ETW Mass Surface Movement Trace"), STAT_SurfaceMovementTrace, STATGROUP_ETWMass);
 
 namespace MassSurfaceMovementConstants
 {
-	extern const float MAX_STEP_SIDE_Z;
-	extern const float VERTICAL_SLOPE_NORMAL_Z;
+	constexpr float MAX_STEP_SIDE_Z = 0.08f;
+	constexpr float VERTICAL_SLOPE_NORMAL_Z = 0.001f;
 
 	/** Minimum delta time considered when ticking. Delta times below this are not considered. This is a very small non-zero value to avoid potential divide-by-zero in simulation code. */
-	extern const float MIN_TICK_TIME;
+	constexpr float MIN_TICK_TIME = 1e-6f;
 
 	/** Minimum acceptable distance for Character capsule to float above floor when walking. */
-	extern const float MIN_FLOOR_DIST;
+	constexpr float MIN_FLOOR_DIST = 1.9f;
 
 	/** Maximum acceptable distance for Character capsule to float above floor when walking. */
-	extern const float MAX_FLOOR_DIST;
+	constexpr float MAX_FLOOR_DIST = 2.4f;
 
 	/** Reject sweep impacts that are this close to the edge of the vertical portion of the capsule when performing vertical sweeps, and try again with a smaller capsule. */
-	extern const float SWEEP_EDGE_REJECT_DISTANCE;
+	constexpr float SWEEP_EDGE_REJECT_DISTANCE = 0.15f;
 
 	/** Stop completely when braking and velocity magnitude is lower than this. */
-	extern const float BRAKE_TO_STOP_VELOCITY;
+	constexpr float BRAKE_TO_STOP_VELOCITY = 10.f;
 
-	extern const float PENETRATION_PULLBACK_DISTANCE;
-	extern const float PENETRATION_OVERLAP_INFLATION;
+	constexpr float PENETRATION_PULLBACK_DISTANCE = 0.125f;
+
+	constexpr float PENETRATION_OVERLAP_INFLATION = 0.100f;
+
+	constexpr int32 FORCE_JUMP_PEAK_SUBSTEP = 1;
+	
+	// Typically we want to depenetrate regardless of direction, so we can get all the way out of penetration quickly.
+	// Our rules for "moving with depenetration normal" only get us so far out of the object. We'd prefer to pop out by the full MTD amount.
+	// Depenetration moves (in ResolvePenetration) then ignore blocking overlaps to be able to move out by the MTD amount.
+	constexpr bool MOVE_IGNORE_FIRST_BLOCKING_OVERLAP = false;
 }
 
 using namespace MassSurfaceMovementConstants;
-
-USTRUCT()
-struct FMassSurfaceMovementTag : public FMassTag
-{
-	GENERATED_BODY()
-};
-
-enum class EMassSurfaceMovementMode : uint8
-{
-	None,
-	Walking,
-	Falling
-};
-
-USTRUCT()
-struct FMassSurfaceMovementFloor
-{
-	GENERATED_BODY()
-	
-};
-
-USTRUCT()
-struct FMassSurfaceMovementFragment : public FMassFragment
-{
-	GENERATED_BODY()
-	
-	//FMassSurfaceMovementFloor Floor;
-	FFindFloorResult Floor;
-	FBasedMovementInfo BasedMovement;
-	
-	/** Saved location of object we are standing on, for UpdateBasedMovement() to determine if base moved in the last frame, and therefore pawn needs an update. */
-	FQuat OldBaseQuat;
-	/** Saved location of object we are standing on, for UpdateBasedMovement() to determine if base moved in the last frame, and therefore pawn needs an update. */
-	FVector OldBaseLocation;
-
-	FRandomStream RandomStream;
-
-	float JumpForceTimeRemaining = 0.f;
-	
-	EMassSurfaceMovementMode MovementMode;
-	EMoveComponentFlags MoveComponentFlags = MOVECOMP_NoFlags;
-	bool bJustTeleported = false;
-	bool bForceNextFloorCheck = false;
-};
-
-USTRUCT()
-struct ENTITYTOTALWAR_API FMassSurfaceMovementParams : public FMassSharedFragment
-{
-	GENERATED_BODY()
-	
-	/** Maximum height character can step up */
-	UPROPERTY(Category="Movement: Floor", EditAnywhere, AdvancedDisplay, meta = (ClampMin = "0", ForceUnits=cm))
-	float MaxStepHeight = 45.f;
-
-	/** MaxFloorTraceDist  should be greater then Step Height!!!! cm */
-	UPROPERTY(Category="Movement: Floor", EditAnywhere, AdvancedDisplay, meta = (ClampMin = "0", ForceUnits=cm))
-	float MaxFloorTraceDist = 200.f;
-
-	/**
-	 * Minimum Z value for floor normal. If less, not a walkable surface. cos(WalkableFloorAngle) cost(45 deg) = 0.71f
-	 */
-	UPROPERTY(Category="Movement: Floor", EditAnywhere, AdvancedDisplay, meta = (ClampMin = "0", ForceUnits="cosine"))
-	float WalkableFloorZ = 0.71f;
-	
-	/** Gravity */
-	UPROPERTY(Category = "Movement: Falling", EditAnywhere, AdvancedDisplay, meta = (ForceUnits="cm / s^2"))
-	float GravityZ = -980.f;
-
-	/**
-	* When perching on a ledge, add this additional distance to MaxStepHeight when determining how high above a walkable floor we can perch.
-	* Note that we still enforce MaxStepHeight to start the step up; this just allows the character to hang off the edge or step slightly higher off the floor.
-	* (@see PerchRadiusThreshold)
-	*/
-	UPROPERTY(Category="Movement: Collision", EditAnywhere, AdvancedDisplay, meta=(ClampMin="0", UIMin="0", ForceUnits=cm))
-	float PerchAdditionalHeight = 40.f;
-
-	/**
-	 * Don't allow the character to perch on the edge of a surface if the contact is this close to the edge of the capsule.
-	 * Note that characters will not fall off if they are within MaxStepHeight of a walkable surface below.
-	 */
-	UPROPERTY(Category="Movement: Collision", EditAnywhere, AdvancedDisplay, meta=(ClampMin="0", UIMin="0", ForceUnits=cm))
-	float PerchRadiusThreshold = 15.f;
-
-	/**
-	 * Factor used to multiply actual value of friction used when braking.
-	 * @note This is 2 by default for historical reasons, a value of 1 gives the true drag equation.
-	 * @see GroundFriction
-	 */
-	UPROPERTY(Category="Movement: Walking", EditAnywhere, AdvancedDisplay, meta=(ClampMin="0", UIMin="0"))
-	float BrakingFrictionFactor = 2.f;
-
-	/**
-	 * Deceleration when walking and not applying acceleration. This is a constant opposing force that directly lowers velocity by a constant value.
-	 * 
-	 */
-	UPROPERTY(Category="Movement: Walking", EditAnywhere, AdvancedDisplay, meta=(ClampMin="0", UIMin="0"))
-	float BrakingDecelerationWalking = 250.f;
-
-	/**
-	 * Lateral deceleration when falling and not applying acceleration.
-	 * 
-	 */
-	UPROPERTY(Category="Movement: Falling", EditAnywhere, AdvancedDisplay, meta=(ClampMin="0", UIMin="0"))
-	float BrakingDecelerationFalling = 0.f;
-
-	/**
-	 * Setting that affects movement control. Higher values allow faster changes in direction.
-	 * If bUseSeparateBrakingFriction is false, also affects the ability to stop more quickly when braking (whenever Acceleration is zero), where it is multiplied by BrakingFrictionFactor.
-	* When braking, this property allows you to control how much friction is applied when moving across the ground, applying an opposing force that scales with current velocity.
-	* This can be used to simulate slippery surfaces such as ice or oil by changing the value (possibly based on the material pawn is standing on).
-	*/
-	UPROPERTY(Category="Movement: Walking", EditAnywhere, AdvancedDisplay, meta=(ClampMin="0", UIMin="0"))
-	float GroundFriction = 8.f;
-
-	/**
-	 * Time substepping when applying braking friction. Smaller time steps increase accuracy at the slight cost of performance, especially if there are large frame times.
-	 */
-	UPROPERTY(Category="Movement: Walking", EditAnywhere, AdvancedDisplay, meta=(ClampMin="0.0166", ClampMax="0.05", UIMin="0.0166", UIMax="0.05"))
-	float BrakingSubStepTime = 1/33.f;
-	
-	/** Used in determining if pawn is going off ledge.  If the ledge is "shorter" than this value then the pawn will be able to walk off it. **/
-	UPROPERTY(Category="Movement: Walking", EditAnywhere, AdvancedDisplay, meta=(ForceUnits=cm))
-	float LedgeCheckThreshold = 4.f;
-
-	/**
-	 * When falling, amount of lateral movement control available to the character.
-	 * 0 = no control, 1 = full control at max speed of MaxWalkSpeed.
-	 */
-	UPROPERTY(Category="Movement: Jumping / Falling", EditAnywhere, AdvancedDisplay, meta=(ClampMin="0", UIMin="0"))
-	float AirControl = 0.35;
-
-	/**
-	 * Friction to apply to lateral air movement when falling.
-	 * If bUseSeparateBrakingFriction is false, also affects the ability to stop more quickly when braking (whenever Acceleration is zero).
-	 * @see BrakingFriction, bUseSeparateBrakingFriction
-	 */
-	UPROPERTY(Category="Movement: Jumping / Falling", EditAnywhere, AdvancedDisplay, meta=(ClampMin="0", UIMin="0"))
-	float FallingLateralFriction = 0.f;
-	
-	/**
-	 * When falling, multiplier applied to AirControl when lateral velocity is less than AirControlBoostVelocityThreshold.
-	 * Setting this to zero will disable air control boosting. Final result is clamped at 1.
-	 */
-	UPROPERTY(Category="Movement: Jumping / Falling", EditAnywhere, AdvancedDisplay, meta=(ClampMin="0", UIMin="0"))
-	float AirControlBoostMultiplier = 2.f;
-
-	/**
-	 * When falling, if lateral velocity magnitude is less than this value, AirControl is multiplied by AirControlBoostMultiplier.
-	 * Setting this to zero will disable air control boosting.
-	 */
-	UPROPERTY(Category="Movement: Jumping / Falling", EditAnywhere, AdvancedDisplay, meta=(ClampMin="0", UIMin="0"))
-	float AirControlBoostVelocityThreshold = 25.f;
-
-	/** Initial velocity (instantaneous vertical acceleration) when jumping. */
-	UPROPERTY(Category="Movement: Jumping / Falling", EditAnywhere, AdvancedDisplay, meta=(DisplayName="Jump Z Velocity", ClampMin="0", UIMin="0", ForceUnits="cm/s"))
-	float JumpZVelocity = 700.f;
-
-	/** Initial impulse force to apply when the player bounces into a blocking physics object. */
-	UPROPERTY(Category="Movement: Physics Interaction", EditAnywhere, AdvancedDisplay, meta=(editcondition = "bEnablePhysicsInteraction"))
-	float InitialPushForceFactor = 500.f;;
-
-	/** Force to apply when the player collides with a blocking physics object. */
-	UPROPERTY(Category="Movement: Physics Interaction", EditAnywhere, AdvancedDisplay, meta=(editcondition = "bEnablePhysicsInteraction"))
-	float PushForceFactor = 750000.0f;
-
-	/** Z-Offset for the position the force is applied to. 0.0f is the center of the physics object, 1.0f is the top and -1.0f is the bottom of the object. */
-	UPROPERTY(Category="Movement: Physics Interaction", EditAnywhere, AdvancedDisplay, meta=(UIMin = "-1.0", UIMax = "1.0"), meta=(editcondition = "bEnablePhysicsInteraction"))
-	float PushForcePointZOffsetFactor = -0.75f;
-	
-	/** If enabled, the PushForceFactor is applied per kg mass of the affected object. */
-	UPROPERTY(Category="Movement: Physics Interaction", EditAnywhere, AdvancedDisplay, meta=(editcondition = "bEnablePhysicsInteraction"))
-	uint8 bPushForceScaledToMass:1 = false;
-	
-	/** If enabled, the player will interact with physics objects when walking into them. */
-	UPROPERTY(Category="Movement: Physics Interaction", EditAnywhere, AdvancedDisplay)
-	uint8 bEnablePhysicsInteraction:1 = true;
-
-	/** If enabled, the PushForce location is moved using PushForcePointZOffsetFactor. Otherwise simply use the impact point. */
-	UPROPERTY(Category = "Movement: Physics Interaction", EditAnywhere, AdvancedDisplay, meta = (editcondition = "bEnablePhysicsInteraction"))
-	uint8 bPushForceUsingZOffset:1 = false;
-
-	/** If enabled, the applied push force will try to get the physics object to the same velocity than the player, not faster. This will only
-	scale the force down, it will never apply more force than defined by PushForceFactor. */
-	UPROPERTY(Category="Movement: Physics Interaction", EditAnywhere, AdvancedDisplay, meta=(editcondition = "bEnablePhysicsInteraction"))
-	uint8 bScalePushForceToVelocity:1 = true;
-	
-	/**
-	 *	Apply gravity while the character is actively jumping (e.g. holding the jump key).
-	 *	Helps remove frame-rate dependent jump height, but may alter base jump height.
-	 */
-	UPROPERTY(Category="Movement: Jumping / Falling", EditAnywhere, AdvancedDisplay)
-	uint8 bApplyGravityWhileJumping:1 = true;
-	
-	/**
-	 * Whether the character ignores changes in rotation of the base it is standing on.
-	 * If true, the character maintains current world rotation.
-	 * If false, the character rotates with the moving base.
-	 */
-	UPROPERTY(Category="Movement: Walking", EditAnywhere, AdvancedDisplay)
-	uint8 bIgnoreBaseRotation:1 = false;
-	
-	/**
-	* Performs floor checks as if the character is using a shape with a flat base.
-	 * This avoids the situation where characters slowly lower off the side of a ledge (as their capsule 'balances' on the edge).
-	*/
-	UPROPERTY(Category="Movement: Floor", EditAnywhere, AdvancedDisplay)
-	uint8 bUseFlatBaseForFloorChecks:1 = false;
-
-	/**
-	 * If true, impart the base component's tangential components of angular velocity when jumping or falling off it.
-	 * Only those components of the velocity allowed by the separate component settings (bImpartBaseVelocityX etc) will be applied.
-	 * @see bImpartBaseVelocityX, bImpartBaseVelocityY, bImpartBaseVelocityZ
-	 */
-	UPROPERTY(Category="Movement: Jumping / Falling", EditAnywhere, AdvancedDisplay)
-	uint8 bImpartBaseAngularVelocity:1 = true;
-
-	/** If true, impart the base actor's X velocity when falling off it (which includes jumping) */
-	UPROPERTY(Category="Movement: Jumping / Falling", EditAnywhere, AdvancedDisplay)
-	uint8 bImpartBaseVelocityX:1 = true;
-
-	/** If true, impart the base actor's Y velocity when falling off it (which includes jumping) */
-	UPROPERTY(Category="Movement: Jumping / Falling", EditAnywhere, AdvancedDisplay)
-	uint8 bImpartBaseVelocityY:1 = true;
-
-	/** If true, impart the base actor's Z velocity when falling off it (which includes jumping) */
-	UPROPERTY(Category="Movement: Jumping / Falling", EditAnywhere, AdvancedDisplay)
-	uint8 bImpartBaseVelocityZ:1 = true;
-	
-	/** If true, Character can walk off a ledge. */
-	UPROPERTY(Category="Movement: Walking", EditAnywhere, AdvancedDisplay)
-	uint8 bCanWalkOffLedges:1 = true;
-		
-	/** Floor */
-	UPROPERTY(Category="Movement: Floor", EditAnywhere, AdvancedDisplay)
-	bool bAlwaysCheckFloor = false;
-
-};
 
 
 /**
@@ -361,14 +130,14 @@ protected:
 
 // UCharacterMovement BEGIN
 
-	inline bool MoveUpdatedComponent(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FVector& Delta, const FQuat& NewRotation, bool bSweep, FHitResult* OutHit = NULL, ETeleportType Teleport = ETeleportType::None) const
+	bool MoveUpdatedComponent(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FVector& Delta, const FQuat& NewRotation, bool bSweep, FHitResult* OutHit = NULL, ETeleportType Teleport = ETeleportType::None) const
 	{
 		return CapsuleFrag.GetMutableCapsuleComponent()->MoveComponent(Delta, NewRotation, bSweep, OutHit);
 	}
 
 	bool SafeMoveUpdatedComponent(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FVector& Delta, const FQuat& NewRotation, bool bSweep, FHitResult& OutHit, ETeleportType Teleport = ETeleportType::None) const;
 
-	inline FVector UMovementComponent::GetPenetrationAdjustment(const FHitResult& Hit) const
+	FVector GetPenetrationAdjustment(const FHitResult& Hit) const
 	{
 		if (!Hit.bStartPenetrating)
 		{
@@ -376,7 +145,7 @@ protected:
 		}
 
 		FVector Result;
-		const float PullBackDistance = FMath::Abs(MovementComponentCVars::PenetrationPullbackDistance);
+		const float PullBackDistance = FMath::Abs(PENETRATION_PULLBACK_DISTANCE);
 		const float PenetrationDepth = (Hit.PenetrationDepth > 0.f ? Hit.PenetrationDepth : 0.125f);
 
 		Result = Hit.Normal * (PenetrationDepth + PullBackDistance);
@@ -386,7 +155,7 @@ protected:
 
 	bool ResolvePenetration(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FVector& ProposedAdjustment, const FHitResult& Hit, const FQuat& NewRotationQuat) const;
 
-	inline bool OverlapTest(const FETW_MassCopsuleFragment& CapsuleFrag, const FVector& Location, const FQuat& RotationQuat, const ECollisionChannel CollisionChannel, const FCollisionShape& CollisionShape) const
+	bool OverlapTest(const FETW_MassCopsuleFragment& CapsuleFrag, const FVector& Location, const FQuat& RotationQuat, const ECollisionChannel CollisionChannel, const FCollisionShape& CollisionShape) const
 	{
 		UPrimitiveComponent* PrimitiveComponent = CapsuleFrag.GetCapsuleComponent();
 		FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(STAT_SurfaceMovementOverlapTest), false);
@@ -395,7 +164,7 @@ protected:
 		return PrimitiveComponent->GetWorld()->OverlapBlockingTestByChannel(Location, RotationQuat, CollisionChannel, CollisionShape, QueryParams, ResponseParam);
 	}
 
-	inline FVector ComputeGroundMovementDelta(const FMassSurfaceMovementParams& MoveParams, const FVector& Delta, const FHitResult& RampHit, const bool bHitFromLineTrace) const
+	FVector ComputeGroundMovementDelta(const FMassSurfaceMovementParams& MoveParams, const FVector& Delta, const FHitResult& RampHit, const bool bHitFromLineTrace) const
 	{
 		const FVector FloorNormal = RampHit.ImpactNormal;
 		const FVector ContactNormal = RampHit.Normal;
@@ -412,7 +181,7 @@ protected:
 		return Delta;
 	}
 
-	inline bool IsWalkable(const FMassSurfaceMovementParams& MoveParams, const FHitResult& Hit) const
+	bool IsWalkable(const FMassSurfaceMovementParams& MoveParams, const FHitResult& Hit) const
 	{
 		if (!Hit.IsValidBlockingHit())
 		{
@@ -445,23 +214,23 @@ protected:
 		return true;
 	}
 	
-	inline FVector ComputeSlideVector(const FVector& Delta, const float Time, const FVector& Normal, const FHitResult& Hit) const
+	FVector ComputeSlideVector(const FVector& Delta, const float Time, const FVector& Normal, const FHitResult& Hit) const
 	{
 		return FVector::VectorPlaneProject(Delta, Normal) * Time;
 	}
 	
-	inline void HandleImpact(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FHitResult& Impact, float TimeSlice=0.f, const FVector& MoveDelta = FVector::ZeroVector) const
+	void HandleImpact(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FHitResult& Impact, float TimeSlice=0.f, const FVector& MoveDelta = FVector::ZeroVector) const
 	{
 		// @todo: notify path following;
 	}
 
-	inline void OnCharacterStuckInGeometry(FMassSurfaceMovementFragment& MoveFrag, const FHitResult* Hit) const
+	void OnCharacterStuckInGeometry(FMassSurfaceMovementFragment& MoveFrag, const FHitResult* Hit) const
 	{
 		// Don't update velocity based on our (failed) change in position this update since we're stuck.
 		MoveFrag.bJustTeleported = true;
 	}
 
-	inline bool CanStepUp(const FMassSurfaceMovementFragment& MoveFrag, const FHitResult& Hit) const
+	bool CanStepUp(const FMassSurfaceMovementFragment& MoveFrag, const FHitResult& Hit) const
 	{
 		if (!Hit.IsValidBlockingHit() || MoveFrag.MovementMode == EMassSurfaceMovementMode::Falling)
 		{
@@ -485,19 +254,19 @@ protected:
 		return true;
 	}
 
-	inline float GetPerchRadiusThreshold(const FMassSurfaceMovementParams& MoveParams) const
+	float GetPerchRadiusThreshold(const FMassSurfaceMovementParams& MoveParams) const
 	{
 		// Don't allow negative values.
 		return FMath::Max(0.f, MoveParams.PerchRadiusThreshold);
 	}
 
-	inline float GetValidPerchRadius(const FETW_MassCopsuleFragment& CapsuleFrag, const FMassSurfaceMovementParams& MoveParams) const
+	float GetValidPerchRadius(const FETW_MassCopsuleFragment& CapsuleFrag, const FMassSurfaceMovementParams& MoveParams) const
 	{
 		const float PawnRadius = CapsuleFrag.GetCapsuleComponent()->GetScaledCapsuleRadius();
 		return FMath::Clamp(PawnRadius - GetPerchRadiusThreshold(MoveParams), 0.11f, PawnRadius);
 	}
 
-	inline bool ShouldComputePerchResult(const FETW_MassCopsuleFragment& CapsuleFrag, const FMassSurfaceMovementParams& MoveParams, const FHitResult& InHit, bool bCheckRadius) const
+	bool ShouldComputePerchResult(const FETW_MassCopsuleFragment& CapsuleFrag, const FMassSurfaceMovementParams& MoveParams, const FHitResult& InHit, bool bCheckRadius) const
 	{
 		if (!InHit.IsValidBlockingHit())
 		{
@@ -535,12 +304,12 @@ protected:
 	
 	void TwoWallAdjust(FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams, FVector& Delta, const FHitResult& Hit, const FVector& OldHitNormal) const;
 
-	inline bool IsMovingOnGround(FMassSurfaceMovementFragment& MoveFrag) const
+	bool IsMovingOnGround(FMassSurfaceMovementFragment& MoveFrag) const
 	{
 		return MoveFrag.MovementMode == EMassSurfaceMovementMode::Walking;
 	}
 
-	inline bool IsWithinEdgeTolerance(const FVector& CapsuleLocation, const FVector& TestImpactPoint, const float CapsuleRadius) const
+	bool IsWithinEdgeTolerance(const FVector& CapsuleLocation, const FVector& TestImpactPoint, const float CapsuleRadius) const
 	{
 		const float DistFromCenterSq = (TestImpactPoint - CapsuleLocation).SizeSquared2D();
 		const float ReducedRadiusSq = FMath::Square(FMath::Max(SWEEP_EDGE_REJECT_DISTANCE + UE_KINDA_SMALL_NUMBER, CapsuleRadius - SWEEP_EDGE_REJECT_DISTANCE));
@@ -549,7 +318,7 @@ protected:
 
 	void FindFloor(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams, const FVector& CapsuleLocation, FFindFloorResult& OutFloorResult, bool bCanUseCachedLocation, const FHitResult* DownwardSweepResult = nullptr) const;
 	
-	inline bool IsFalling(FMassSurfaceMovementFragment& MoveFrag) const
+	bool IsFalling(FMassSurfaceMovementFragment& MoveFrag) const
 	{
 		return MoveFrag.MovementMode == EMassSurfaceMovementMode::Falling;
 	}
@@ -561,7 +330,7 @@ protected:
 	void PhysWalking(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const float DeltaTime) const;
 	void PhysFalling(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const float DeltaTime) const;
 
-	inline void SetMovementMode(FMassVelocityFragment& VelocityFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams, EMassSurfaceMovementMode NewMovementMode) const
+	void SetMovementMode(FMassVelocityFragment& VelocityFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams, EMassSurfaceMovementMode NewMovementMode) const
 	{
 		EMassSurfaceMovementMode PrevModeMode = MoveFrag.MovementMode;
 		MoveFrag.MovementMode = NewMovementMode;
@@ -578,17 +347,17 @@ protected:
 
 	void CalcVelocity(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag,  FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const float DeltaTime, float Friction, const bool bFluid, float BrakingDeceleration) const;
 
-	inline float GetMaxAcceleration(const FMassMovementParameters& SpeedParams) const
+	float GetMaxAcceleration(const FMassMovementParameters& SpeedParams) const
 	{
 		return SpeedParams.MaxAcceleration;
 	}
 
-	inline float GetMaxSpeed(const FMassMovementParameters& SpeedParams) const
+	float GetMaxSpeed(const FMassMovementParameters& SpeedParams) const
 	{
 		return SpeedParams.MaxSpeed;
 	}
 	
-	inline float GetMaxBrakingDeceleration(FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams) const
+	float GetMaxBrakingDeceleration(FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams) const
 	{
 		switch (MoveFrag.MovementMode)
 		{
@@ -601,7 +370,7 @@ protected:
 		}
 	}
 	
-	inline bool IsExceedingMaxSpeed(const FVector& Velocity, float MaxSpeed) const
+	bool IsExceedingMaxSpeed(const FVector& Velocity, float MaxSpeed) const
 	{
 		MaxSpeed = FMath::Max(0.f, MaxSpeed);
 		const float MaxSpeedSquared = FMath::Square(MaxSpeed);
@@ -613,7 +382,7 @@ protected:
 
 	void ApplyVelocityBraking(FMassVelocityFragment& VelocityFrag, const FMassSurfaceMovementParams& MoveParams, float DeltaTime, float Friction, float BrakingDeceleration) const;
 	
-	inline bool CanWalkOffLedges(const FMassSurfaceMovementParams& MoveParams) const
+	bool CanWalkOffLedges(const FMassSurfaceMovementParams& MoveParams) const
 	{
 		return MoveParams.bCanWalkOffLedges;
 	}
@@ -622,13 +391,13 @@ protected:
 
 	bool CheckLedgeDirection(FETW_MassCopsuleFragment& CapsuleFrag, const FMassSurfaceMovementParams& MoveParams, const FVector& OldLocation, const FVector& SideStep, const FVector& GravDir) const;
 	
-	inline FCollisionShape GetPawnCapsuleCollisionShape(const UCapsuleComponent* Capsule, const EShrinkCapsuleExtent ShrinkMode, const float CustomShrinkAmount = 0.f) const
+	FCollisionShape GetPawnCapsuleCollisionShape(const UCapsuleComponent* Capsule, const EShrinkCapsuleExtent ShrinkMode, const float CustomShrinkAmount = 0.f) const
 	{
 		FVector Extent = GetPawnCapsuleExtent(Capsule, ShrinkMode, CustomShrinkAmount);
 		return FCollisionShape::MakeCapsule(Extent);
 	}
 
-	inline FVector GetPawnCapsuleExtent(const UCapsuleComponent* Capsule, const EShrinkCapsuleExtent ShrinkMode, const float CustomShrinkAmount = 0.f) const
+	FVector GetPawnCapsuleExtent(const UCapsuleComponent* Capsule, const EShrinkCapsuleExtent ShrinkMode, const float CustomShrinkAmount = 0.f) const
 	{
 		float Radius, HalfHeight;
 		Capsule->GetScaledCapsuleSize(Radius, HalfHeight);
@@ -674,7 +443,7 @@ protected:
 	*/	
 	void RevertMove(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams, const FVector& OldLocation, UPrimitiveComponent* OldBase, const FVector& PreviousBaseLocation, const FFindFloorResult& OldFloor, bool bFailMove) const;
 	/** Check if pawn is falling */
-	inline bool CheckFall(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const FFindFloorResult& OldFloor, const FHitResult& Hit, const FVector& Delta, const FVector& OldLocation, float RemainingTime, float TimeTick, bool bMustJump) const
+	bool CheckFall(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const FFindFloorResult& OldFloor, const FHitResult& Hit, const FVector& Delta, const FVector& OldLocation, float RemainingTime, float TimeTick, bool bMustJump) const
 	{
 		if (bMustJump || CanWalkOffLedges(MoveParams))
 		{
@@ -689,7 +458,7 @@ protected:
 		return false;
 	}
 
-	inline void StartFalling(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, float RemainingTime, float TimeTick, const FVector& Delta, const FVector& SubLoc) const
+	void StartFalling(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, float RemainingTime, float TimeTick, const FVector& Delta, const FVector& SubLoc) const
 	{
 		// start falling 
 		const float DesiredDist = Delta.Size();
@@ -722,7 +491,7 @@ protected:
 	void SaveBaseLocation(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams) const;
 	void SetBase(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams, UPrimitiveComponent* NewBaseComponent, const FName BoneName = NAME_None) const;
 	/** Save a new relative location in BasedMovement and a new rotation with is either relative or absolute. */
-	inline void SaveRelativeBasedMovement(FMassSurfaceMovementFragment& MoveFrag, const FVector& NewRelativeLocation, const FRotator& NewRotation, bool bRelativeRotation) const
+	void SaveRelativeBasedMovement(FMassSurfaceMovementFragment& MoveFrag, const FVector& NewRelativeLocation, const FRotator& NewRotation, bool bRelativeRotation) const
 	{
 		FBasedMovementInfo& BasedMovement = MoveFrag.BasedMovement;
 		
@@ -735,7 +504,7 @@ protected:
 	/**
 	 * Update the base of the character, using the given floor result if it is walkable, or null if not. Calls SetBase().
 	 */
-	inline void SetBaseFromFloor(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams, const FFindFloorResult& FloorResult) const
+	void SetBaseFromFloor(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams, const FFindFloorResult& FloorResult) const
 	{
 		if (FloorResult.IsWalkableFloor())
 		{
@@ -747,7 +516,7 @@ protected:
 		}
 	}
 
-	inline FVector GetImpartedMovementBaseVelocity(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams) const
+	FVector GetImpartedMovementBaseVelocity(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams) const
 	{
 		FBasedMovementInfo& BasedMovement = MoveFrag.BasedMovement;
 		UCapsuleComponent* UpdatedComponent = CapsuleFrag.GetMutableCapsuleComponent();
@@ -783,7 +552,7 @@ protected:
 	}
 
 
-	inline void UMassApplySurfaceMovementProcessor::StartNewPhysics(FMassVelocityFragment& VelocityFrag,
+	void StartNewPhysics(FMassVelocityFragment& VelocityFrag,
 		FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag,
 		const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams,
 		const float DeltaTime) const
@@ -840,7 +609,7 @@ protected:
 		//}
 	}
 
-	inline FVector GetFallingLateralAcceleration(const FMassVelocityFragment& VelocityFrag, const FMassForceFragment& ForceFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, float DeltaTime) const
+	FVector GetFallingLateralAcceleration(const FMassVelocityFragment& VelocityFrag, const FMassForceFragment& ForceFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, float DeltaTime) const
 	{
 		const FVector& Acceleration = ForceFrag.Value;
 		
@@ -858,7 +627,7 @@ protected:
 		return FallAcceleration;
 	}
 
-	inline FVector GetAirControl(const FMassVelocityFragment& VelocityFrag, const FMassSurfaceMovementParams& MoveParams, const float DeltaTime, float TickAirControl, const FVector& FallAcceleration) const
+	FVector GetAirControl(const FMassVelocityFragment& VelocityFrag, const FMassSurfaceMovementParams& MoveParams, const float DeltaTime, float TickAirControl, const FVector& FallAcceleration) const
 	{
 		// Boost
 		if (TickAirControl != 0.f)
@@ -869,7 +638,7 @@ protected:
 		return TickAirControl * FallAcceleration;
 	}
 
-	inline float BoostAirControl(const FMassVelocityFragment& VelocityFrag, const FMassSurfaceMovementParams& MoveParams, const float DeltaTime, float TickAirControl, const FVector& FallAcceleration) const
+	float BoostAirControl(const FMassVelocityFragment& VelocityFrag, const FMassSurfaceMovementParams& MoveParams, const float DeltaTime, float TickAirControl, const FVector& FallAcceleration) const
 	{
 		// Allow a burst of initial acceleration
 		if (MoveParams.AirControlBoostMultiplier > 0.f && VelocityFrag.Value.SizeSquared2D() < FMath::Square(MoveParams.AirControlBoostVelocityThreshold))
@@ -880,7 +649,7 @@ protected:
 		return TickAirControl;
 	}
 
-	inline FVector NewFallVelocity(const FVector& InitialVelocity, const FVector& Gravity, float DeltaTime) const
+	FVector NewFallVelocity(const FVector& InitialVelocity, const FVector& Gravity, float DeltaTime) const
 	{
 		//FVector Result = InitialVelocity;
 		//
@@ -906,7 +675,7 @@ protected:
 		return InitialVelocity + Gravity * DeltaTime;
 	}
 
-	//inline void DecayFormerBaseVelocity(float DeltaTime, const FMassSurfaceMovementParams& MoveParams)
+	//void DecayFormerBaseVelocity(float DeltaTime, const FMassSurfaceMovementParams& MoveParams)
 	//{
 	//	if (!CharacterMovementCVars::bAddFormerBaseVelocityToRootMotionOverrideWhenFalling || FormerBaseVelocityDecayHalfLife == 0.f)
 	//	{
@@ -921,7 +690,7 @@ protected:
 	/** Verify that the supplied hit result is a valid landing spot when falling. */
 	bool IsValidLandingSpot(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams, const FVector& CapsuleLocation, const FHitResult& Hit) const;
 
-	inline void ProcessLanded(FMassVelocityFragment& VelocityFrag,
+	void ProcessLanded(FMassVelocityFragment& VelocityFrag,
 		FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag,
 		const FMassMovementParameters& SpeedParams,const FMassSurfaceMovementParams& MoveParams, const FHitResult& Hit, float RemainingTime) const
 	{
@@ -962,7 +731,7 @@ protected:
 		StartNewPhysics(VelocityFrag, ForceFrag, CapsuleFrag, MoveFrag, SpeedParams, MoveParams, RemainingTime);
 	}
 
-	inline void SetPostLandedPhysics(FMassVelocityFragment& VelocityFrag,
+	void SetPostLandedPhysics(FMassVelocityFragment& VelocityFrag,
 		FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag,
 		const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const FHitResult& Hit) const
 	{
@@ -994,7 +763,7 @@ protected:
 		}
 	}
 
-	inline FVector LimitAirControl(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams, float DeltaTime, const FVector& FallAcceleration, const FHitResult& HitResult, bool bCheckForValidLandingSpot) const
+	FVector LimitAirControl(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams, float DeltaTime, const FVector& FallAcceleration, const FHitResult& HitResult, bool bCheckForValidLandingSpot) const
 	{
 		FVector Result(FallAcceleration);
 
@@ -1022,7 +791,7 @@ protected:
 
 	void ApplyImpactPhysicsForces(const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const FHitResult& Impact, const FVector& ImpactAcceleration, const FVector& ImpactVelocity) const;
 
-	inline bool ShouldCheckForValidLandingSpot(FETW_MassCopsuleFragment& CapsuleFrag, float DeltaTime, const FVector& Delta, const FHitResult& Hit) const
+	bool ShouldCheckForValidLandingSpot(FETW_MassCopsuleFragment& CapsuleFrag, float DeltaTime, const FVector& Delta, const FHitResult& Hit) const
 	{
 		const UCapsuleComponent* UpdatedComponent = CapsuleFrag.GetMutableCapsuleComponent();
 		
