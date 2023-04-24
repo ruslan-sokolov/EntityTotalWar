@@ -1955,6 +1955,323 @@ void UMassApplySurfaceMovementProcessor::ApplyImpactPhysicsForces(const FMassMov
 	 }
 }
 
+void UMassApplySurfaceMovementProcessor::SimulateMovement(FMassVelocityFragment& VelocityFrag,
+	FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag,
+	const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams,
+	const float DeltaTime) const
+{
+	SCOPE_CYCLE_COUNTER_MASS_SURFACE_MOVEMENT(STAT_SurfaceMovementSimulateMovement);
+
+	UPrimitiveComponent* UpdatedComponent = CapsuleFrag.GetMutableCapsuleComponent();
+	
+	FVector OldVelocity;
+	FVector OldLocation;
+	
+	// Scoped updates can improve performance of multiple MoveComponent calls.
+	{
+		FScopedMovementUpdate ScopedMovementUpdate(UpdatedComponent, MoveParams.bEnableScopedMovementUpdates ? EScopedUpdate::DeferredUpdates : EScopedUpdate::ImmediateUpdates);
+
+		bool bHandledNetUpdate = false;
+		//if (bIsSimulatedProxy)
+		{
+			// Handle network changes
+			//if (bNetworkUpdateReceived)
+			//{
+			//	bNetworkUpdateReceived = false;
+			//	bHandledNetUpdate = true;
+			//	UE_LOG(LogCharacterMovement, Verbose, TEXT("Proxy %s received net update"), *CharacterOwner->GetName());
+			//	if (bNetworkMovementModeChanged)
+			//	{
+			//		ApplyNetworkMovementMode(CharacterOwner->GetReplicatedMovementMode());
+			//		bNetworkMovementModeChanged = false;
+			//	}
+			//	else if (bJustTeleported || bForceNextFloorCheck)
+			//	{
+			//		// Make sure floor is current. We will continue using the replicated base, if there was one.
+			//		bJustTeleported = false;
+			//		UpdateFloorFromAdjustment();
+			//	}
+			//}
+			if (MoveFrag.bForceNextFloorCheck)
+			{
+				UpdateFloorFromAdjustment(CapsuleFrag, MoveFrag, MoveParams);
+			}
+		}
+
+		//UpdateCharacterStateBeforeMovement(DeltaSeconds);
+
+		if (MoveFrag.MovementMode != EMassSurfaceMovementMode::None)
+		{
+			//TODO: Also ApplyAccumulatedForces()?
+			//HandlePendingLaunch();
+		}
+		//ClearAccumulatedForces();
+
+		if (MoveFrag.MovementMode == EMassSurfaceMovementMode::None)
+		{
+			return;
+		}
+
+		//const bool bSimGravityDisabled = (bIsSimulatedProxy && CharacterOwner->bSimGravityDisabled);
+		//const bool bZeroReplicatedGroundVelocity = (bIsSimulatedProxy && IsMovingOnGround() && ConstRepMovement.LinearVelocity.IsZero());
+		//
+		//// bSimGravityDisabled means velocity was zero when replicated and we were stuck in something. Avoid external changes in velocity as well.
+		//// Being in ground movement with zero velocity, we cannot simulate proxy velocities safely because we might not get any further updates from the server.
+		//if (bSimGravityDisabled || bZeroReplicatedGroundVelocity)
+		//{
+		//	Velocity = FVector::ZeroVector;
+		//}
+
+		MaybeUpdateBasedMovement(DeltaSeconds);
+
+		// simulated pawns predict location
+		OldVelocity = Velocity;
+		OldLocation = UpdatedComponent->GetComponentLocation();
+
+		UpdateProxyAcceleration();
+
+		// May only need to simulate forward on frames where we haven't just received a new position update.
+		if (!bHandledNetUpdate || !bNetworkSkipProxyPredictionOnNetUpdate || !CharacterMovementCVars::NetEnableSkipProxyPredictionOnNetUpdate)
+		{
+			UE_LOG(LogCharacterMovement, Verbose, TEXT("Proxy %s simulating movement"), *GetNameSafe(CharacterOwner));
+			FStepDownResult StepDownResult;
+			MoveSmooth(Velocity, DeltaSeconds, &StepDownResult);
+
+			// find floor and check if falling
+			if (IsMovingOnGround() || MovementMode == MOVE_Falling)
+			{
+				if (StepDownResult.bComputedFloor)
+				{
+					CurrentFloor = StepDownResult.FloorResult;
+				}
+				else if (Velocity.Z <= 0.f)
+				{
+					FindFloor(UpdatedComponent->GetComponentLocation(), CurrentFloor, Velocity.IsZero(), NULL);
+				}
+				else
+				{
+					CurrentFloor.Clear();
+				}
+
+				if (!CurrentFloor.IsWalkableFloor())
+				{
+					if (!bSimGravityDisabled)
+					{
+						// No floor, must fall.
+						if (Velocity.Z <= 0.f || bApplyGravityWhileJumping || !CharacterOwner->IsJumpProvidingForce())
+						{
+							Velocity = NewFallVelocity(Velocity, FVector(0.f, 0.f, GetGravityZ()), DeltaSeconds);
+						}
+					}
+					SetMovementMode(MOVE_Falling);
+				}
+				else
+				{
+					// Walkable floor
+					if (IsMovingOnGround())
+					{
+						AdjustFloorHeight();
+						SetBase(CurrentFloor.HitResult.Component.Get(), CurrentFloor.HitResult.BoneName);
+					}
+					else if (MovementMode == MOVE_Falling)
+					{
+						if (CurrentFloor.FloorDist <= MIN_FLOOR_DIST || (bSimGravityDisabled && CurrentFloor.FloorDist <= MAX_FLOOR_DIST))
+						{
+							// Landed
+							SetPostLandedPhysics(CurrentFloor.HitResult);
+						}
+						else
+						{
+							if (!bSimGravityDisabled)
+							{
+								// Continue falling.
+								Velocity = NewFallVelocity(Velocity, FVector(0.f, 0.f, GetGravityZ()), DeltaSeconds);
+							}
+							CurrentFloor.Clear();
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			UE_LOG(LogCharacterMovement, Verbose, TEXT("Proxy %s SKIPPING simulate movement"), *GetNameSafe(CharacterOwner));
+		}
+
+		UpdateCharacterStateAfterMovement(DeltaSeconds);
+
+		// consume path following requested velocity
+		LastUpdateRequestedVelocity = bHasRequestedVelocity ? RequestedVelocity : FVector::ZeroVector;
+		bHasRequestedVelocity = false;
+
+		OnMovementUpdated(DeltaSeconds, OldLocation, OldVelocity);
+	} // End scoped movement update
+
+	// Call custom post-movement events. These happen after the scoped movement completes in case the events want to use the current state of overlaps etc.
+	CallMovementUpdateDelegate(DeltaSeconds, OldLocation, OldVelocity);
+
+	if (CharacterMovementCVars::BasedMovementMode == 0)
+	{
+		SaveBaseLocation(); // behaviour before implementing this fix
+	}
+	else
+	{
+		MaybeSaveBaseLocation();
+	}
+	UpdateComponentVelocity();
+	bJustTeleported = false;
+
+	LastUpdateLocation = UpdatedComponent ? UpdatedComponent->GetComponentLocation() : FVector::ZeroVector;
+	LastUpdateRotation = UpdatedComponent ? UpdatedComponent->GetComponentQuat() : FQuat::Identity;
+	LastUpdateVelocity = Velocity;
+}
+
+void UMassApplySurfaceMovementProcessor::UpdateFloorFromAdjustment(FETW_MassCopsuleFragment& CapsuleFrag,
+	FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams) const
+{
+	//if (!HasValidData())
+	//{
+	//	return;
+	//}
+
+	// If walking, try to update the cached floor so it is current. This is necessary for UpdateBasedMovement() and MoveAlongFloor() to work properly.
+	// If base is now NULL, presumably we are no longer walking. If we had a valid floor but don't find one now, we'll likely start falling.
+	if (MoveFrag.BasedMovement.MovementBase)
+	{
+		const FVector& ComponentLocation = CapsuleFrag.GetCapsuleComponent()->GetComponentLocation();
+		FindFloor(CapsuleFrag, MoveFrag, MoveParams, ComponentLocation, MoveFrag.Floor, false);
+	}
+	else
+	{
+		MoveFrag.Floor.Clear();
+	}
+}
+
+void UMassApplySurfaceMovementProcessor::UpdateBasedMovement(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const float DeltaSeconds) const
+{
+	//if (!HasValidData())
+	//{
+	//	return;
+	//}
+
+	const UPrimitiveComponent* MovementBase = MoveFrag.BasedMovement.MovementBase;
+	if (!MovementBaseUtility::UseRelativeLocation(MovementBase))
+	{
+		return;
+	}
+
+	if (!IsValid(MovementBase) || !IsValid(MovementBase->GetOwner()))
+	{
+		SetBase(CapsuleFrag, MoveFrag, MoveParams, NULL);
+		return;
+	}
+
+	// Ignore collision with bases during these movements.
+	TGuardValue<EMoveComponentFlags> ScopedFlagRestore(MoveFrag.MoveComponentFlags, MoveFrag.MoveComponentFlags | MOVECOMP_IgnoreBases);
+
+	FQuat DeltaQuat = FQuat::Identity;
+	FVector DeltaPosition = FVector::ZeroVector;
+
+	FQuat NewBaseQuat;
+	FVector NewBaseLocation;
+	if (!MovementBaseUtility::GetMovementBaseTransform(MovementBase, MoveFrag.BasedMovement.BoneName, NewBaseLocation, NewBaseQuat))
+	{
+		return;
+	}
+
+	FVector& OldBaseLocation = MoveFrag.OldBaseLocation;
+	FQuat& OldBaseQuat = MoveFrag.OldBaseQuat;
+	UCapsuleComponent* UpdatedComponent = CapsuleFrag.GetMutableCapsuleComponent();
+	
+	// Find change in rotation
+	const bool bRotationChanged = !OldBaseQuat.Equals(NewBaseQuat, 1e-8f);
+	if (bRotationChanged)
+	{
+		DeltaQuat = NewBaseQuat * OldBaseQuat.Inverse();
+	}
+
+	// only if base moved
+	if (bRotationChanged || (OldBaseLocation != NewBaseLocation))
+	{
+		// Calculate new transform matrix of base actor (ignoring scale).
+		const FQuatRotationTranslationMatrix OldLocalToWorld(OldBaseQuat, OldBaseLocation);
+		const FQuatRotationTranslationMatrix NewLocalToWorld(NewBaseQuat, NewBaseLocation);
+
+		FQuat FinalQuat = UpdatedComponent->GetComponentQuat();
+			
+		if (bRotationChanged && !MoveParams.bIgnoreBaseRotation)
+		{
+			// Apply change in rotation and pipe through FaceRotation to maintain axis restrictions
+			const FQuat PawnOldQuat = UpdatedComponent->GetComponentQuat();
+			const FQuat TargetQuat = DeltaQuat * FinalQuat;
+			FRotator TargetRotator(TargetQuat);
+			//CharacterOwner->FaceRotation(TargetRotator, 0.f);
+			FinalQuat = UpdatedComponent->GetComponentQuat();
+
+			if (PawnOldQuat.Equals(FinalQuat, 1e-6f))
+			{
+				// Nothing changed. This means we probably are using another rotation mechanism (bOrientToMovement etc). We should still follow the base object.
+				// @todo: This assumes only Yaw is used, currently a valid assumption. This is the only reason FaceRotation() is used above really, aside from being a virtual hook.
+				if (MoveParams.bOrientRotationToMovement)
+				{
+					TargetRotator.Pitch = 0.f;
+					TargetRotator.Roll = 0.f;
+					MoveUpdatedComponent(CapsuleFrag, MoveFrag, FVector::ZeroVector, TargetRotator, false);
+					FinalQuat = UpdatedComponent->GetComponentQuat();
+				}
+			}
+
+			// Pipe through ControlRotation, to affect camera.
+			//if (CharacterOwner->Controller) 
+			//{
+			//	const FQuat PawnDeltaRotation = FinalQuat * PawnOldQuat.Inverse();
+			//	FRotator FinalRotation = FinalQuat.Rotator();
+			//	UpdateBasedRotation(FinalRotation, PawnDeltaRotation.Rotator());
+			//	FinalQuat = UpdatedComponent->GetComponentQuat();
+			//}
+		}
+
+		// We need to offset the base of the character here, not its origin, so offset by half height
+		float HalfHeight, Radius;
+		UpdatedComponent->GetScaledCapsuleSize(Radius, HalfHeight);
+
+		FVector const BaseOffset(0.0f, 0.0f, HalfHeight);
+		FVector const LocalBasePos = OldLocalToWorld.InverseTransformPosition(UpdatedComponent->GetComponentLocation() - BaseOffset);
+		FVector const NewWorldPos = ConstrainLocationToPlane(NewLocalToWorld.TransformPosition(LocalBasePos) + BaseOffset);
+		DeltaPosition = ConstrainDirectionToPlane(NewWorldPos - UpdatedComponent->GetComponentLocation());
+
+		// move attached actor
+		if (bFastAttachedMove)
+		{
+			// we're trusting no other obstacle can prevent the move here
+			UpdatedComponent->SetWorldLocationAndRotation(NewWorldPos, FinalQuat, false);
+		}
+		else
+		{
+			// hack - transforms between local and world space introducing slight error FIXMESTEVE - discuss with engine team: just skip the transforms if no rotation?
+			FVector BaseMoveDelta = NewBaseLocation - OldBaseLocation;
+			if (!bRotationChanged && (BaseMoveDelta.X == 0.f) && (BaseMoveDelta.Y == 0.f))
+			{
+				DeltaPosition.X = 0.f;
+				DeltaPosition.Y = 0.f;
+			}
+
+			FHitResult MoveOnBaseHit(1.f);
+			const FVector OldLocation = UpdatedComponent->GetComponentLocation();
+			MoveUpdatedComponent(DeltaPosition, FinalQuat, true, &MoveOnBaseHit);
+			if ((UpdatedComponent->GetComponentLocation() - (OldLocation + DeltaPosition)).IsNearlyZero() == false)
+			{
+				OnUnableToFollowBaseMove(DeltaPosition, OldLocation, MoveOnBaseHit);
+			}
+		}
+
+		if (MovementBase->IsSimulatingPhysics() && CharacterOwner->GetMesh())
+		{
+			CharacterOwner->GetMesh()->ApplyDeltaToAllPhysicsTransforms(DeltaPosition, DeltaQuat);
+		}
+	}
+}
+
 void UMassApplySurfaceMovementProcessor::PhysFalling(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const float DeltaTime) const
 {
 	SCOPE_CYCLE_COUNTER_MASS_SURFACE_MOVEMENT(STAT_CharPhysFalling);

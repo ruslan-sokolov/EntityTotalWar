@@ -32,6 +32,7 @@ DECLARE_CYCLE_STAT(TEXT("ETW Mass Surface Movement Find Floor"), STAT_SurfaceMov
 DECLARE_CYCLE_STAT(TEXT("ETW Mass Surface Movement Walking"), STAT_SurfaceMovementWalking, STATGROUP_ETWMass);
 DECLARE_CYCLE_STAT(TEXT("ETW Mass Surface Movement Adjust Floor"), STAT_SurfaceMovementCharAdjustFloorHeight, STATGROUP_ETWMass);
 DECLARE_CYCLE_STAT(TEXT("ETW Mass Surface Movement Process Landed"), STAT_SurfaceMovementCharProcessLanded, STATGROUP_ETWMass);
+DECLARE_CYCLE_STAT(TEXT("ETW Mass Surface Movement Simulate Movement"), STAT_SurfaceMovementSimulateMovement, STATGROUP_ETWMass);
 
 namespace MassSurfaceMovementConstants
 {
@@ -131,6 +132,11 @@ protected:
 // UCharacterMovement BEGIN
 
 	bool MoveUpdatedComponent(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FVector& Delta, const FQuat& NewRotation, bool bSweep, FHitResult* OutHit = NULL, ETeleportType Teleport = ETeleportType::None) const
+	{
+		return CapsuleFrag.GetMutableCapsuleComponent()->MoveComponent(Delta, NewRotation, bSweep, OutHit);
+	}
+
+	bool MoveUpdatedComponent(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FVector& Delta, const FRotator& NewRotation, bool bSweep, FHitResult* OutHit = NULL, ETeleportType Teleport = ETeleportType::None) const
 	{
 		return CapsuleFrag.GetMutableCapsuleComponent()->MoveComponent(Delta, NewRotation, bSweep, OutHit);
 	}
@@ -809,7 +815,17 @@ protected:
 		return false;
 	}
 
+	void SimulateMovement(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const float DeltaTime) const;
+
+	void UpdateFloorFromAdjustment(FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassSurfaceMovementParams& MoveParams) const;
+
+	void UpdateBasedMovement(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const float DeltaSeconds) const;
 	
+	/** Update or defer updating of position based on Base movement */
+	void MaybeUpdateBasedMovement(const float DeltaSeconds) const
+	{
+		
+	}
 	
 	// UCharacterMovement END
 	

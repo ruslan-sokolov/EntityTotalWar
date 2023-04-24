@@ -52,7 +52,11 @@ struct FMassSurfaceMovementFragment : public FMassFragment
 	EMassSurfaceMovementMode MovementMode;
 	EMoveComponentFlags MoveComponentFlags = MOVECOMP_NoFlags;
 	bool bJustTeleported = false;
+
 	bool bForceNextFloorCheck = false;
+
+	/** Flag set in pre-physics update to indicate that based movement should be updated post-physics */
+	bool bDeferUpdateBasedMovement = false;
 };
 
 USTRUCT()
@@ -245,5 +249,21 @@ struct ENTITYTOTALWAR_API FMassSurfaceMovementParams : public FMassSharedFragmen
 	/** Floor */
 	UPROPERTY(Category="Movement: Floor", EditAnywhere, AdvancedDisplay)
 	bool bAlwaysCheckFloor = false;
+
+	/**
+	 * If true, high-level movement updates will be wrapped in a movement scope that accumulates updates and defers a bulk of the work until the end.
+	 * When enabled, touch and hit events will not be triggered until the end of multiple moves within an update, which can improve performance.
+	 *
+	 * @see FScopedMovementUpdate
+	 */
+	UPROPERTY(Category="Movement", EditAnywhere, AdvancedDisplay)
+	bool bEnableScopedMovementUpdates = true;
+
+	/**
+	* If true, rotate the Character toward the direction of acceleration, using RotationRate as the rate of rotation change. Overrides UseControllerDesiredRotation.
+	* Normally you will want to make sure that other settings are cleared, such as bUseControllerRotationYaw on the Character.
+	*/
+	UPROPERTY(Category="Movement", EditAnywhere, AdvancedDisplay)
+	bool bOrientRotationToMovement = true;
 
 };
