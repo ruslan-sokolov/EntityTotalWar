@@ -1703,6 +1703,7 @@ void UMassApplySurfaceMovementProcessor::SaveBaseLocation(FETW_MassCopsuleFragme
 		{
 			// Relative Location
 			FVector RelativeLocation;
+
 			MovementBaseUtility::GetLocalMovementBaseLocation(MovementBase, BasedMovement.BoneName, UpdatedComponent->GetComponentLocation(), RelativeLocation);
 
 			// Rotation
@@ -1955,11 +1956,9 @@ void UMassApplySurfaceMovementProcessor::ApplyImpactPhysicsForces(const FMassMov
 	 }
 }
 
-void UMassApplySurfaceMovementProcessor::SimulateMovement(FMassVelocityFragment& VelocityFrag,
-	FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag,
-	const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams,
-	const float DeltaTime) const
+void UMassApplySurfaceMovementProcessor::SimulateMovement(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const float DeltaTime) const
 {
+	/*
 	SCOPE_CYCLE_COUNTER_MASS_SURFACE_MOVEMENT(STAT_SurfaceMovementSimulateMovement);
 
 	UPrimitiveComponent* UpdatedComponent = CapsuleFrag.GetMutableCapsuleComponent();
@@ -2022,8 +2021,10 @@ void UMassApplySurfaceMovementProcessor::SimulateMovement(FMassVelocityFragment&
 		//	Velocity = FVector::ZeroVector;
 		//}
 
-		MaybeUpdateBasedMovement(DeltaSeconds);
-
+		MaybeUpdateBasedMovement(DeltaTime);
+		
+		FVector& Velocity = VelocityFrag.Value;
+		
 		// simulated pawns predict location
 		OldVelocity = Velocity;
 		OldLocation = UpdatedComponent->GetComponentLocation();
@@ -2124,6 +2125,7 @@ void UMassApplySurfaceMovementProcessor::SimulateMovement(FMassVelocityFragment&
 	LastUpdateLocation = UpdatedComponent ? UpdatedComponent->GetComponentLocation() : FVector::ZeroVector;
 	LastUpdateRotation = UpdatedComponent ? UpdatedComponent->GetComponentQuat() : FQuat::Identity;
 	LastUpdateVelocity = Velocity;
+	*/
 }
 
 void UMassApplySurfaceMovementProcessor::UpdateFloorFromAdjustment(FETW_MassCopsuleFragment& CapsuleFrag,
@@ -2149,6 +2151,7 @@ void UMassApplySurfaceMovementProcessor::UpdateFloorFromAdjustment(FETW_MassCops
 
 void UMassApplySurfaceMovementProcessor::UpdateBasedMovement(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const float DeltaSeconds) const
 {
+	/*
 	//if (!HasValidData())
 	//{
 	//	return;
@@ -2270,6 +2273,11 @@ void UMassApplySurfaceMovementProcessor::UpdateBasedMovement(FMassVelocityFragme
 			CharacterOwner->GetMesh()->ApplyDeltaToAllPhysicsTransforms(DeltaPosition, DeltaQuat);
 		}
 	}
+	*/
+}
+
+void UMassApplySurfaceMovementProcessor::MaybeUpdateBasedMovement(const float DeltaSeconds) const
+{
 }
 
 void UMassApplySurfaceMovementProcessor::PhysFalling(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const float DeltaTime) const

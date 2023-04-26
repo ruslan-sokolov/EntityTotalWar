@@ -822,10 +822,8 @@ protected:
 	void UpdateBasedMovement(FMassVelocityFragment& VelocityFrag, FMassForceFragment& ForceFrag, FETW_MassCopsuleFragment& CapsuleFrag, FMassSurfaceMovementFragment& MoveFrag, const FMassMovementParameters& SpeedParams, const FMassSurfaceMovementParams& MoveParams, const float DeltaSeconds) const;
 	
 	/** Update or defer updating of position based on Base movement */
-	void MaybeUpdateBasedMovement(const float DeltaSeconds) const
-	{
-		
-	}
+	void MaybeUpdateBasedMovement(const float DeltaSeconds) const;
+
 	
 	// UCharacterMovement END
 	
