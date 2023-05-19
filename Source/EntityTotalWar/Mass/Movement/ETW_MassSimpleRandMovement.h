@@ -66,3 +66,43 @@ protected:
 
 	FMassEntityQuery EntityQuery;
 };
+
+USTRUCT()
+struct FETW_MassRandVelocityTag : public FMassTag
+{
+	GENERATED_BODY()
+};
+
+/**
+ *
+ */
+UCLASS(meta = (DisplayName = "ETW Mass Random Velocity"))
+class ENTITYTOTALWAR_API UETW_MassRandVelocityTrait : public UMassEntityTraitBase
+{
+	GENERATED_BODY()
+
+public:
+	virtual void BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const override;
+
+	UPROPERTY(EditAnywhere, Category = "Mass|Movement")
+	FMassMassSimpleRandMovementParams Params;
+};
+
+
+/**
+ *
+ */
+UCLASS()
+class ENTITYTOTALWAR_API UMassRandVelocityProcessor : public UMassProcessor
+{
+	GENERATED_BODY()
+
+public:
+	UMassRandVelocityProcessor();
+
+protected:
+	virtual void ConfigureQueries() override;
+	virtual void Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context) override;
+
+	FMassEntityQuery EntityQuery;
+};

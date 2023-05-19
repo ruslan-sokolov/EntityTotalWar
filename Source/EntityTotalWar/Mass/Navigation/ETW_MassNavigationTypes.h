@@ -57,6 +57,9 @@ struct ENTITYTOTALWAR_API FMassPathFollowParams : public FMassSharedFragment
 	UPROPERTY(EditAnywhere, Category = "Navigation", meta = (ClampMin = "0", ForceUnits="cm"))
 	float SlackRadius = 30.f;
 
+	UPROPERTY(EditAnywhere, Category = "Navigation", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float DesiredSpeed = 450.f;
+
 	UPROPERTY(EditAnywhere, Category = "Navigation", meta = (ClampMin = "0", ForceUnits="cm"))
 	float TempTestRandomNavigationRadius = 3000.f;
 

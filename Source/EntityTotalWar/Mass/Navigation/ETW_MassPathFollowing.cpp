@@ -11,6 +11,9 @@
 #include "../Common/Fragments/ETW_MassFragments.h"
 #include "ETW_MassNavigationSubsystem.h"
 #include "EnvironmentQuery/EnvQueryGenerator.h"
+#include "Translators/MassCharacterMovementTranslators.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "MassMovementFragments.h"
 
 void UETW_PathFollowTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const
 {
@@ -45,6 +48,9 @@ void UETW_MassPathFollowProcessor::ConfigureQueries()
 	EntityQuery.AddConstSharedRequirement<FMassPathFollowParams>(EMassFragmentPresence::All);
 
 	EntityQuery.AddTagRequirement<FMassPathFollowingProgressTag>(EMassFragmentPresence::All);
+
+	EntityQuery.AddRequirement<FCharacterMovementComponentWrapperFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::Optional);
+
 }
 
 void UETW_MassPathFollowProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
@@ -62,6 +68,9 @@ void UETW_MassPathFollowProcessor::Execute(FMassEntityManager& EntityManager, FM
 
 		UETW_MassNavigationSubsystem* NavigationSubsystem = Context.GetMutableSubsystem<UETW_MassNavigationSubsystem>(World);
 
+		const TConstArrayView<FCharacterMovementComponentWrapperFragment> MovementComponentList = Context.GetFragmentView<FCharacterMovementComponentWrapperFragment>();
+		bool bHasMovementComponent = MovementComponentList.Num() > 0;
+
 		for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
 		{
 			FMassMoveTargetFragment& MoveTargetFrag = MoveTargetFragList[EntityIndex];
@@ -69,19 +78,21 @@ void UETW_MassPathFollowProcessor::Execute(FMassEntityManager& EntityManager, FM
 			FVector& TargetLocation = TargetLocationList[EntityIndex].Target;
 			const FVector CurrentLocation = TransformList[EntityIndex].GetTransform().GetLocation();
 
+			const FCharacterMovementComponentWrapperFragment* MovementCompFrag = bHasMovementComponent ? &MovementComponentList[EntityIndex] : nullptr;
+
 			// update MoveTargetFragment
 			FVector DirectionToTarget = TargetLocation - CurrentLocation;
 			MoveTargetFrag.Center = CurrentLocation;
 			// FVector DirectionToTarget = MoveTargetFrag.Center - CurrentLocation;
 			MoveTargetFrag.Forward = DirectionToTarget.GetSafeNormal();
 			MoveTargetFrag.DistanceToGoal = DirectionToTarget.Size();
-			
+
 			if (MoveTargetFrag.GetCurrentAction() == EMassMovementAction::Stand || MoveTargetFrag.DistanceToGoal <= PathFollowParams.SlackRadius)
 			{
 				FMassEntityHandle EntityHandle = Context.GetEntity(EntityIndex);
 				
 				// deferred:
-				Context.Defer().PushCommand<FMassDeferredChangeCompositionCommand>([NavigationSubsystem, EntityHandle, &PathFrag, &MoveTargetFrag, &TargetLocation, World, CurrentLocation, &PathFollowParams](FMassEntityManager& Manager){
+				Context.Defer().PushCommand<FMassDeferredChangeCompositionCommand>([MovementCompFrag, NavigationSubsystem, EntityHandle, &PathFrag, &MoveTargetFrag, &TargetLocation, World, CurrentLocation, &PathFollowParams](FMassEntityManager& Manager){
 					
 					if (NavigationSubsystem->EntityExtractNextPathPoint(EntityHandle, PathFrag))
 					{
@@ -92,14 +103,11 @@ void UETW_MassPathFollowProcessor::Execute(FMassEntityManager& EntityManager, FM
 					}
 					else
 					{
-						// add tag for able to process path with UETW_MassPathFollowProcessor
-						//Manager.AddTagToEntity(EntityHandle, FMassPathFollowingRequestTag::StaticStruct());
-						//Manager.RemoveTagFromEntity(EntityHandle, FMassPathFollowingProgressTag::StaticStruct());
 						const float DistMax = PathFollowParams.TempTestRandomNavigationRadius;
 						const FVector NewMoveToLocation = FVector(FMath::FRandRange(-DistMax, DistMax), FMath::FRandRange(-DistMax, DistMax), 0) + CurrentLocation;
 						NavigationSubsystem->EntityRequestNewPath(EntityHandle, PathFollowParams, CurrentLocation, NewMoveToLocation, PathFrag);
 
-						// dbg temp remove
+						// @todo: dbg temp remove
 						if (auto NavPath = NavigationSubsystem->EntityGetNavPath(EntityHandle))
 						{
 							auto Color = FLinearColor::MakeRandomColor().ToFColor(true);
@@ -135,7 +143,6 @@ void UETW_MassPathFollowInitializer::Register()
 {
 	check(ObservedType);
 	UMassObserverRegistry::GetMutable().RegisterObserver(*ObservedType, Operation, GetClass());
-	UMassObserverRegistry::GetMutable().RegisterObserver(*FMassPathFollowingRequestTag::StaticStruct(), EMassObservedOperation::Add, GetClass());
 }
 
 void UETW_MassPathFollowInitializer::ConfigureQueries()
@@ -145,8 +152,9 @@ void UETW_MassPathFollowInitializer::ConfigureQueries()
 	EntityQuery.AddRequirement<FMassMoveTargetFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FMassTargetLocationFragment>(EMassFragmentAccess::ReadWrite);
 
+	EntityQuery.AddConstSharedRequirement<FMassMovementParameters>(EMassFragmentPresence::Optional);
+
 	EntityQuery.AddConstSharedRequirement<FMassPathFollowParams>();
-	EntityQuery.AddConstSharedRequirement<FMassMovementParameters>();
 }
 
 void UETW_MassPathFollowInitializer::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
@@ -161,14 +169,16 @@ void UETW_MassPathFollowInitializer::Execute(FMassEntityManager& EntityManager, 
 		const TArrayView<FMassTargetLocationFragment> TargetLocationList = Context.GetMutableFragmentView<FMassTargetLocationFragment>();
 
 		const FMassPathFollowParams& PathFollowParams = Context.GetConstSharedFragment<FMassPathFollowParams>();
-
 		const float DistMax = PathFollowParams.TempTestRandomNavigationRadius;
-		const float DesiredSpeed = Context.GetConstSharedFragment<FMassMovementParameters>().MaxSpeed;
+
+		const FMassMovementParameters* MovementParametersPtr = Context.GetConstSharedFragmentPtr<FMassMovementParameters>();
 		
+		float DesiredSpeed = MovementParametersPtr ? MovementParametersPtr->MaxSpeed : PathFollowParams.DesiredSpeed;
+
 		for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
 		{
 			const FVector& InitialLocation = TransformList[EntityIndex].GetTransform().GetLocation();
-			
+
 			// initialize desired speed:
 			MoveTargetList[EntityIndex].DesiredSpeed = FMassInt16Real(DesiredSpeed);
 			MoveTargetList[EntityIndex].DistanceToGoal = 0.f;

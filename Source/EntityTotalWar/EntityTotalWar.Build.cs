@@ -60,6 +60,6 @@ public class EntityTotalWar : ModuleRules
 		);
 		
 		PrivateIncludePaths.Add("EntityTotalWar/");
-		//PrivateIncludePaths.Add("EntityTotalWar/Mass/");
+		PrivateIncludePaths.Add("EntityTotalWar/Mass/");
 	}
 }

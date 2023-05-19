@@ -12,6 +12,8 @@
 #include "../Common/Fragments/ETW_MassFragments.h"
 #include "MassCommanderComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include <Translators/MassCharacterMovementTranslators.h>
+#include "GameFramework/CharacterMovementComponent.h"
 
 void UETW_MassMoveToCursorTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext,
 	const UWorld& World) const
@@ -20,7 +22,7 @@ void UETW_MassMoveToCursorTrait::BuildTemplate(FMassEntityTemplateBuildContext& 
 	//BuildContext.RequireFragment<FMassForceFragment>();
 	BuildContext.RequireFragment<FTransformFragment>();
 
-	BuildContext.RequireFragment<FMassMovementParameters>();
+	//BuildContext.RequireFragment<FMassMovementParameters>();
 	
 	BuildContext.AddFragment<FMassMoveToCursorFragment>();
 
@@ -45,18 +47,24 @@ void UETW_MassMoveToCursorProcessor::ConfigureQueries()
 	EntityQuery.AddRequirement<FMassVelocityFragment>(EMassFragmentAccess::ReadWrite);
 	//EntityQuery.AddRequirement<FMassForceFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FMassMoveToCursorFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FCharacterMovementComponentWrapperFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::Optional);
 
 	EntityQuery.AddConstSharedRequirement<FMassMoveToCursorParams>(EMassFragmentPresence::All);
-	EntityQuery.AddConstSharedRequirement<FMassMovementParameters>(EMassFragmentPresence::All);
+	EntityQuery.AddConstSharedRequirement<FMassMovementParameters>(EMassFragmentPresence::Optional);
 }
 
 void UETW_MassMoveToCursorProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
 {
 	EntityQuery.ForEachEntityChunk(EntityManager, Context, ([](FMassExecutionContext& Context)
 		{
-			const float ArriveSlackRadius = Context.GetConstSharedFragment<FMassMoveToCursorParams>().TargetReachThreshold;
-			const FMassMovementParameters& MovementParams = Context.GetConstSharedFragment<FMassMovementParameters>();
-			const float Speed = MovementParams.MaxSpeed;
+			const FMassMoveToCursorParams MoveToCursorParams = Context.GetConstSharedFragment<FMassMoveToCursorParams>();
+			const float ArriveSlackRadius = MoveToCursorParams.TargetReachThreshold;
+			const FMassMovementParameters* MovementParams = Context.GetConstSharedFragmentPtr<FMassMovementParameters>();
+			
+			const TConstArrayView<FCharacterMovementComponentWrapperFragment> CharacterMovementList = Context.GetFragmentView<FCharacterMovementComponentWrapperFragment>();
+			bool bHasMovementComponent = CharacterMovementList.Num() > 0;
+
+			const float Speed = MovementParams ? MovementParams->MaxSpeed : MoveToCursorParams.SpeedFallbackValue;
 		
 			const TArrayView<FMassVelocityFragment> VelocityList = Context.GetMutableFragmentView<FMassVelocityFragment>();
 			//const TArrayView<FMassForceFragment> ForceList = Context.GetMutableFragmentView<FMassForceFragment>();
@@ -65,6 +73,12 @@ void UETW_MassMoveToCursorProcessor::Execute(FMassEntityManager& EntityManager, 
 
 			for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
 			{
+				float EntitySpeed = Speed;
+				if (bHasMovementComponent && CharacterMovementList[EntityIndex].Component.IsValid())
+				{
+					EntitySpeed = CharacterMovementList[EntityIndex].Component->GetMaxSpeed();
+				}
+				
 				FMassMoveToCursorFragment& MoveToCursor = MoveToCursorList[EntityIndex];
 
 				//FVector& Force = ForceList[EntityIndex].Value;
@@ -134,6 +148,7 @@ void UETW_MassMoveToCursorInitializer::Execute(FMassEntityManager& EntityManager
 			// initialize initial location:
 			FMassMoveToCursorFragment& MoveToCursorFrag = MoveToCursorList[EntityIndex];
 
+			// @todo: initialize in world system on processing phase started event
 			UMassCommanderComponent* CommanderComp = Cast<UMassCommanderComponent>(UGameplayStatics::GetPlayerPawn(World, 0)->GetComponentByClass(UMassCommanderComponent::StaticClass()));
 			ensure(CommanderComp);
 

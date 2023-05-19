@@ -12,7 +12,7 @@
 
 void UMassSimpleRandMovementTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const
 {
-	BuildContext.AddFragment_GetRef<FTransformFragment>();
+	BuildContext.AddFragment<FTransformFragment>();
 	BuildContext.AddFragment<FMassVelocityFragment>();
 	BuildContext.AddFragment<FMassTargetLocationFragment>();
 	BuildContext.AddTag<FMassSimpleRandMovementTag>();
@@ -90,4 +90,77 @@ void UMassSimpleRandMovementProcessor::Execute(FMassEntityManager& EntityManager
 			}
 		}));
 
+}
+
+void UETW_MassRandVelocityTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const
+{
+	BuildContext.AddFragment<FMassVelocityFragment>();
+	BuildContext.RequireFragment<FTransformFragment>();
+	BuildContext.AddFragment<FMassForceFragment>();
+	BuildContext.AddFragment<FMassTargetLocationFragment>();
+	BuildContext.AddTag<FETW_MassRandVelocityTag>();
+
+	FMassEntityManager& EntityManager = UE::Mass::Utils::GetEntityManagerChecked(World);
+
+	const FConstSharedStruct ParamsFragment = EntityManager.GetOrCreateConstSharedFragment(Params);
+	BuildContext.AddConstSharedFragment(ParamsFragment);
+}
+
+UMassRandVelocityProcessor::UMassRandVelocityProcessor()
+	: EntityQuery(*this)
+{
+	bAutoRegisterWithProcessingPhases = true;
+	ExecutionFlags = (int32)(EProcessorExecutionFlags::Server | EProcessorExecutionFlags::Standalone);
+	ExecutionOrder.ExecuteInGroup = UE::Mass::ProcessorGroupNames::Avoidance;
+}
+
+void UMassRandVelocityProcessor::ConfigureQueries()
+{
+	EntityQuery.AddRequirement<FMassVelocityFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FMassForceFragment>(EMassFragmentAccess::ReadOnly);
+	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
+	EntityQuery.AddRequirement<FMassTargetLocationFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddTagRequirement<FETW_MassRandVelocityTag>(EMassFragmentPresence::All);
+
+	EntityQuery.AddConstSharedRequirement<FMassMassSimpleRandMovementParams>(EMassFragmentPresence::All);
+
+	EntityQuery.SetChunkFilter(&FMassSimulationVariableTickChunkFragment::ShouldTickChunkThisFrame);
+}
+
+void UMassRandVelocityProcessor::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
+{
+	EntityQuery.ForEachEntityChunk(EntityManager, Context, ([this](FMassExecutionContext& Context)
+		{
+			const float Speed = Context.GetConstSharedFragment<FMassMassSimpleRandMovementParams>().Speed;
+			const float AcceptanceRadius = Context.GetConstSharedFragment<FMassMassSimpleRandMovementParams>().AcceptanceRadius;
+			const float MoveDistMax = Context.GetConstSharedFragment<FMassMassSimpleRandMovementParams>().MoveDistMax;
+
+			const TArrayView<FMassVelocityFragment> VelocitiesList = Context.GetMutableFragmentView<FMassVelocityFragment>();
+			const TConstArrayView<FMassForceFragment> ForceList = Context.GetFragmentView<FMassForceFragment>();
+			const TConstArrayView<FTransformFragment> TransformList = Context.GetFragmentView<FTransformFragment>();
+			const TArrayView<FMassTargetLocationFragment> TargetList = Context.GetMutableFragmentView<FMassTargetLocationFragment>();
+
+			for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
+			{
+				const FTransform& Transform = TransformList[EntityIndex].GetTransform();
+				FVector& MoveTarget = TargetList[EntityIndex].Target;
+
+				FVector CurrentLocation = Transform.GetLocation();
+				FVector TargetVector = MoveTarget - CurrentLocation;
+
+				FVector& Velocity = VelocitiesList[EntityIndex].Value;
+				FVector& Force = VelocitiesList[EntityIndex].Value;
+				Velocity = TargetVector.GetSafeNormal() * Speed;
+
+				const float DeltaTime = Context.GetDeltaTimeSeconds();
+				Velocity += Force * DeltaTime;
+
+
+				if (FMath::Abs((CurrentLocation - MoveTarget).Size()) <= AcceptanceRadius || MoveTarget.IsZero())
+				{
+					// set new target
+					MoveTarget = FVector(FMath::FRandRange(-MoveDistMax, MoveDistMax), FMath::FRandRange(-MoveDistMax, MoveDistMax), 200.f);
+				}
+			}
+		}));
 }

@@ -25,6 +25,9 @@ struct ENTITYTOTALWAR_API FMassMoveToCursorParams : public FMassSharedFragment
 
 	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0", ForceUnits="cm"))
 	float TargetReachThreshold = 50.f;
+
+	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float SpeedFallbackValue = 450.f;
 };
 
 /**
