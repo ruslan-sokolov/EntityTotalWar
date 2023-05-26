@@ -6,16 +6,24 @@
 #include "MassProcessor.h"
 #include "MassEntityTypes.h"
 #include "MassObserverProcessor.h"
+#include "MassCommonFragments.h"
 #include "ETW_MassMoveToCursor.generated.h"
+
+
+USTRUCT()
+struct FMassMoveToCursorCommanderFragment : public FObjectWrapperFragment
+{
+	GENERATED_BODY()
+	TObjectPtr<class UMassCommanderComponent> CommanderComp;
+};
 
 USTRUCT()
 struct FMassMoveToCursorFragment : public FMassFragment
 {
 	GENERATED_BODY()
 
-	FVector Target;
-	float Timer;
-	TObjectPtr<class UMassCommanderComponent> CommanderComp;
+	FVector Target = FVector::ZeroVector;
+	float Timer = 0.f;
 };
 
 USTRUCT()

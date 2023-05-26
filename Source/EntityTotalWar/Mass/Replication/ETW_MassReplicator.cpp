@@ -51,6 +51,9 @@ void UETW_MassReplicator::ProcessClientReplication(FMassExecutionContext& Contex
 	};
 
 	CalculateClientReplication<FETW_MassFastArrayItem>(Context, ReplicationContext, CacheViewsCallback, AddEntityCallback, ModifyEntityCallback, RemoveEntityCallback);
+
+	// hack fix query when only one arhcheotype and no updating valid archetypes cos last archeotype version in manager is same
+	//Context.GetEntityManagerChecked().DebugForceArchetypeDataVersionBump();
 #endif // UE_REPLICATION_COMPILE_SERVER_CODE
 }
 

@@ -14,6 +14,7 @@
 #include "Kismet/GameplayStatics.h"
 #include <Translators/MassCharacterMovementTranslators.h>
 #include "GameFramework/CharacterMovementComponent.h"
+#include "MassCommands.h"
 
 void UETW_MassMoveToCursorTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext,
 	const UWorld& World) const
@@ -47,6 +48,7 @@ void UETW_MassMoveToCursorProcessor::ConfigureQueries()
 	EntityQuery.AddRequirement<FMassVelocityFragment>(EMassFragmentAccess::ReadWrite);
 	//EntityQuery.AddRequirement<FMassForceFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FMassMoveToCursorFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FMassMoveToCursorCommanderFragment>(EMassFragmentAccess::ReadWrite);
 	EntityQuery.AddRequirement<FCharacterMovementComponentWrapperFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::Optional);
 
 	EntityQuery.AddConstSharedRequirement<FMassMoveToCursorParams>(EMassFragmentPresence::All);
@@ -70,9 +72,16 @@ void UETW_MassMoveToCursorProcessor::Execute(FMassEntityManager& EntityManager, 
 			//const TArrayView<FMassForceFragment> ForceList = Context.GetMutableFragmentView<FMassForceFragment>();
 			const TArrayView<FTransformFragment> TransformList = Context.GetMutableFragmentView<FTransformFragment>();
 			const TArrayView<FMassMoveToCursorFragment> MoveToCursorList = Context.GetMutableFragmentView<FMassMoveToCursorFragment>();
+			const TArrayView<FMassMoveToCursorCommanderFragment> MoveToCursorCommanderList = Context.GetMutableFragmentView<FMassMoveToCursorCommanderFragment>();
 
 			for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
 			{
+				UMassCommanderComponent* CommanderComp = MoveToCursorCommanderList[EntityIndex].CommanderComp;
+				if (!CommanderComp)
+				{
+					continue;
+				}
+
 				float EntitySpeed = Speed;
 				if (bHasMovementComponent && CharacterMovementList[EntityIndex].Component.IsValid())
 				{
@@ -93,12 +102,13 @@ void UETW_MassMoveToCursorProcessor::Execute(FMassEntityManager& EntityManager, 
 				{
 					Velocity = FVector::Zero();
 					MoveToCursor.Timer = 0.f;
-					// deferred:
-					Context.Defer().PushCommand<FMassDeferredChangeCompositionCommand>([&MoveToCursor](FMassEntityManager& Manager){
-						//NavigationSubsystem->EntityRequestNewPath(EntityHandle, PathFollowParams, InitialLocation, NewMoveToLocation, PathFragment);
-						ensure(MoveToCursor.CommanderComp);
-						MoveToCursor.Target = MoveToCursor.CommanderComp->GetCommandLocation();
-					});
+
+					MoveToCursor.Target = CommanderComp->GetCommandLocation();
+					//// deferred:
+					//Context.Defer().PushCommand<FMassDeferredChangeCompositionCommand>([&MoveToCursor, CommanderComp](FMassEntityManager& Manager){
+					//	//NavigationSubsystem->EntityRequestNewPath(EntityHandle, PathFollowParams, InitialLocation, NewMoveToLocation, PathFragment);
+					//	MoveToCursor.Target = CommanderComp->GetCommandLocation();
+					//});
 				}
 				else
 				{
@@ -136,26 +146,32 @@ void UETW_MassMoveToCursorInitializer::ConfigureQueries()
 }
 
 void UETW_MassMoveToCursorInitializer::Execute(FMassEntityManager& EntityManager,
-                                                       FMassExecutionContext& Context)
+	FMassExecutionContext& Context)
 {
 	UWorld* World = EntityManager.GetWorld();
 	EntityQuery.ForEachEntityChunk(EntityManager, Context, [World](FMassExecutionContext Context)
 	{
 		const TArrayView<FMassMoveToCursorFragment> MoveToCursorList = Context.GetMutableFragmentView<FMassMoveToCursorFragment>();
 
-		for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
+		TConstArrayView<FMassEntityHandle> Entities = Context.GetEntities();
+
+		if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(World, 0))
 		{
-			// initialize initial location:
-			FMassMoveToCursorFragment& MoveToCursorFrag = MoveToCursorList[EntityIndex];
+			if (UMassCommanderComponent* CommanderComp = Cast<UMassCommanderComponent>(PlayerPawn->GetComponentByClass(UMassCommanderComponent::StaticClass())))
+			{
+				FMassMoveToCursorCommanderFragment CommanderFrag;
+				CommanderFrag.CommanderComp = CommanderComp;
 
-			// @todo: initialize in world system on processing phase started event
-			UMassCommanderComponent* CommanderComp = Cast<UMassCommanderComponent>(UGameplayStatics::GetPlayerPawn(World, 0)->GetComponentByClass(UMassCommanderComponent::StaticClass()));
-			ensure(CommanderComp);
+				for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
+				{
+					// this is actually not very good to create commander fragment copy for each entity
+					Context.Defer().PushCommand<FMassCommandAddFragmentInstances>(Context.GetEntity(EntityIndex), CommanderFrag);
 
-			MoveToCursorFrag.CommanderComp = CommanderComp;
-			MoveToCursorFrag.Timer = 0.f;
-		};
-		
+					FMassMoveToCursorFragment MoveToCursorFrag = MoveToCursorList[EntityIndex];
+					MoveToCursorFrag.Timer = 0.f;
+				}
+			};
+		}
 	});
-}
 
+}

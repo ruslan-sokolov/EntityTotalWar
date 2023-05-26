@@ -133,11 +133,14 @@ public:
 
 	FETW_MassClientBubbleSerializer& GetSerializer() { return Serializer; }
 
+	UFUNCTION()
+	void OnRep_Serializer();
 protected:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	UPROPERTY(Replicated, Transient)
+	UPROPERTY(ReplicatedUsing = OnRep_Serializer, Transient)
 	FETW_MassClientBubbleSerializer Serializer;
+
 
 };

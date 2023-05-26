@@ -179,3 +179,9 @@ void AETW_MassClientBubbleInfo::GetLifetimeReplicatedProps(TArray<FLifetimePrope
 	DOREPLIFETIME_WITH_PARAMS_FAST(AETW_MassClientBubbleInfo, Serializer, SharedParams);
 }
 
+void AETW_MassClientBubbleInfo::OnRep_Serializer()
+{
+	// hack fix query when only one arhcheotype and no updating valid archetypes cos last archeotype version in manager is same
+	//FMassEntityManager& EntityManager = Serializer.GetEntityManagerChecked();
+	//EntityManager.DebugForceArchetypeDataVersionBump();
+}
