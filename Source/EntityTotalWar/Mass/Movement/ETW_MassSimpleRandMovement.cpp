@@ -156,7 +156,7 @@ void UMassRandVelocityProcessor::Execute(FMassEntityManager& EntityManager, FMas
 				Velocity += Force * DeltaTime;
 
 
-				if (FMath::Abs((CurrentLocation - MoveTarget).Size()) <= AcceptanceRadius || MoveTarget.IsZero())
+				if (FMath::Abs((CurrentLocation - MoveTarget).Size2D()) <= AcceptanceRadius || MoveTarget.IsZero())
 				{
 					// set new target
 					MoveTarget = FVector(FMath::FRandRange(-MoveDistMax, MoveDistMax), FMath::FRandRange(-MoveDistMax, MoveDistMax), 200.f);

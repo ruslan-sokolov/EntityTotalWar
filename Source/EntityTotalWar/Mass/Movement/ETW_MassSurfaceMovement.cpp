@@ -1704,7 +1704,7 @@ void UMassApplySurfaceMovementProcessor::SaveBaseLocation(FETW_MassCopsuleFragme
 			// Relative Location
 			FVector RelativeLocation;
 
-			MovementBaseUtility::GetLocalMovementBaseLocation(MovementBase, BasedMovement.BoneName, UpdatedComponent->GetComponentLocation(), RelativeLocation);
+			MovementBaseUtility::TransformLocationToLocal(MovementBase, BasedMovement.BoneName, UpdatedComponent->GetComponentLocation(), RelativeLocation);
 
 			// Rotation
 			if (MoveParams.bIgnoreBaseRotation)
