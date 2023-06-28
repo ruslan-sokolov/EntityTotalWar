@@ -15,13 +15,13 @@ class ENTITYTOTALWAR_API AETW_PlayerCameraPawn : public APawn
 	UPROPERTY(VisibleAnywhere)
 	USceneComponent* RootComp;
 
-	UPROPERTY(Category = Camera, EditDefaultsOnly, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(Category = Camera, EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	class USpringArmComponent* SpringArmComp;
 
-	UPROPERTY(Category = Camera, EditDefaultsOnly, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(Category = Camera, EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	class UCameraComponent* CameraComp;
 
-	UPROPERTY(Category = Camera, EditDefaultsOnly, meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(Category = Camera, EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	class UMassCommanderComponent* MassCommanderComp;	
 	
 	// movement ------------------------------------------------ /
@@ -72,15 +72,6 @@ public:
 
 public:
 	AETW_PlayerCameraPawn();
-
-
-	UFUNCTION(BlueprintImplementableEvent)
-	void OnTrySelectUnit(const FHitResult& HitResult, bool bSuccess);
-
-	UFUNCTION(BlueprintImplementableEvent)
-	void OnTryCommandUnit(const FHitResult& HitResult, bool bSuccess);
-
-protected:
 
 public:	
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;

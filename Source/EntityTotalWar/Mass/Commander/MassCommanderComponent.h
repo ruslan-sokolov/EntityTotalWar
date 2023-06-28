@@ -6,45 +6,91 @@
 #include "Components/ActorComponent.h"
 #include "MassCommanderComponent.generated.h"
 
+USTRUCT(BlueprintType, Blueprintable)
+struct ENTITYTOTALWAR_API FMassCommanderCommandTrace
+{
+	GENERATED_BODY()
+
+	//UPROPERTY()
+	//FVector_NetQuantize Location;
+
+	//UPROPERTY()
+	//FVector_NetQuantizeNormal Normal;
+
+	/** PrimitiveComponent hit by the trace. */
+	//UPROPERTY()
+	//TWeakObjectPtr<UPrimitiveComponent> ComponentHit;
+
+
+	UPROPERTY(BlueprintReadWrite)
+	FHitResult Trace;
+};
+
+//// All members of FHitResult are PODs.
+//template<> struct TIsPODType<FMassCommanderCommandTrace> { enum { Value = true }; };
+//
+//template<>
+//struct TStructOpsTypeTraits<FMassCommanderCommandTrace> : public TStructOpsTypeTraitsBase2<FMassCommanderCommandTrace>
+//{
+//	enum
+//	{
+//		WithNetSerializer = true,
+//	};
+//};
+
+
 UCLASS(ClassGroup=(Custom), Blueprintable, meta=(BlueprintSpawnableComponent))
 class ENTITYTOTALWAR_API UMassCommanderComponent : public UActorComponent
 {
 	GENERATED_BODY()
 	
-	UPROPERTY(BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
-	FHitResult LastSelectUnitResult;
-
-	UPROPERTY(BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
-	FHitResult LastCommandUnitResult;
-
-protected:
-	UPROPERTY()
-	class AETW_PlayerCameraPawn* PlayerCameraPawn;
-	
 public:
-	// Sets default values for this component's properties
 	UMassCommanderComponent();
 
+	// call this when input key action for command is received to trigger command
 	UFUNCTION(BlueprintCallable)
-	const FVector& GetCommandLocation() const { return LastCommandUnitResult.Location; }
+	void ReceiveCommandInputAction();
 
-protected:
-	// Called when the game starts
-	virtual void BeginPlay() override;
+	UFUNCTION(Server, Reliable)
+	void ServerProcessInputAction();
 
-public:
-	// Called every frame
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
-	                           FActorComponentTickFunction* ThisTickFunction) override;
+	UFUNCTION(BlueprintImplementableEvent)
+	void K2_ServerProcessInputAction();
 
-	void TrySelectUnit();
-	void TryCommandUnit();
+	UFUNCTION(BlueprintImplementableEvent)
+	void K2_ReceiveCommandInputAction();
 
-protected:
-
-
-private:
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCommandProcessedDelegate, FMassCommanderCommandTrace, Result);
 	
-	bool LineTraceFromCursor(FHitResult& OutHit);
+	UPROPERTY(BlueprintAssignable)
+	FOnCommandProcessedDelegate OnCommandProcessedDelegate;
+
+	UFUNCTION(BlueprintCallable)
+	const FVector& GetCommandLocation() const { return CommandTraceResult.Trace.Location; }
+
+	// try to find player camera component
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
+	void SetTraceFromComponent(USceneComponent* InTraceFromComponent);
+
+protected:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	virtual void InitializeComponent() override;
+
+	UPROPERTY(EditDefaultsOnly)
+	// by default is player camera component
+	TWeakObjectPtr<USceneComponent> TraceFromComponent;
+
+	UFUNCTION()
+	void OnRep_CommandTraceResult();
+
+	UPROPERTY(ReplicatedUsing = OnRep_CommandTraceResult, BlueprintReadOnly)
+	FMassCommanderCommandTrace CommandTraceResult;
+
+	
+	bool RaycastCommandTarget();
+
+	FHitResult LastCommandTraceResult;
+
 	
 };

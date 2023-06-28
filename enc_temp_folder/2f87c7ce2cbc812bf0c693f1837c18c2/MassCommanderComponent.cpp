@@ -36,7 +36,6 @@ bool UMassCommanderComponent::RaycastCommandTarget()
 		const FVector TraceEnd = TraceStart + TraceDirection * 30000.f;
 
 		bSuccessHit = GetWorld()->LineTraceSingleByChannel(LastCommandTraceResult, TraceStart, TraceEnd, ECC_Visibility);
-		CommandTraceResult = { LastCommandTraceResult };
 	}
 	else if (TraceFromComponent.IsValid())
 	{

@@ -138,8 +138,8 @@ void AETW_PlayerCameraPawn::OnSelect_Pressed()
 	}
 	else
 	{
-		ensure(MassCommanderComp);
-		MassCommanderComp->TrySelectUnit();
+		//ensure(MassCommanderComp);
+		//MassCommanderComp->TrySelectUnit();
 	}
 	
 }
@@ -164,7 +164,7 @@ void AETW_PlayerCameraPawn::OnApplyAction_Released()
 	if (Velocity.Size() <= 20.f)
 	{
 		ensure(MassCommanderComp);
-		MassCommanderComp->TryCommandUnit();
+		MassCommanderComp->ReceiveCommandInputAction();
 	}
 }
 
