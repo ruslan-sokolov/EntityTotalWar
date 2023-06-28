@@ -52,7 +52,7 @@ public:
 	void ReceiveCommandInputAction();
 
 	UFUNCTION(Server, Reliable)
-	void ServerProcessInputAction();
+	void ServerProcessInputAction(FVector_NetQuantize ClientCursorLocation, FVector_NetQuantize ClientCursorDirection, bool bTraceFromCursor);
 
 	UFUNCTION(BlueprintImplementableEvent)
 	void K2_ServerProcessInputAction();
@@ -88,7 +88,7 @@ protected:
 	FMassCommanderCommandTrace CommandTraceResult;
 
 	
-	bool RaycastCommandTarget();
+	bool RaycastCommandTarget(const FVector& ClientCursorLocation, const FVector& ClientCursorDirection, bool bTraceFromCursor = false);
 
 	FHitResult LastCommandTraceResult;
 

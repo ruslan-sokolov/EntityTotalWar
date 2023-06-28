@@ -74,6 +74,7 @@ void AETW_PlayerCameraPawn::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 void AETW_PlayerCameraPawn::PossessedBy(AController* NewController)
 {
+	Super::PossessedBy(NewController);
 	if (APlayerController* PC = Cast<APlayerController>(NewController))
 	{
 		PC->SetShowMouseCursor(true);

@@ -13,30 +13,22 @@ void UMassCommanderComponent::SetTraceFromComponent_Implementation(USceneCompone
 	}
 }
 
-bool UMassCommanderComponent::RaycastCommandTarget()
+bool UMassCommanderComponent::RaycastCommandTarget(const FVector& ClientCursorLocation, const FVector& ClientCursorDirection, bool bTraceFromCursor)
 {
 	bool bSuccessHit = false;
 
-	bool bTraceFromCursor = false;
-	APlayerController* PC = nullptr;
-	if (APawn* OwnerPawn = Cast<APawn>(GetOwner()))
+	if (bTraceFromCursor)
 	{
-		if (APlayerController* PlayerPC = OwnerPawn->GetController<APlayerController>())
+		if (APawn* OwnerPawn = Cast<APawn>(GetOwner()))
 		{
-			PC = PlayerPC;
-			bTraceFromCursor = PC->bShowMouseCursor;
+			if (APlayerController* PC = OwnerPawn->GetController<APlayerController>())
+			{
+				const FVector TraceEnd = ClientCursorLocation + ClientCursorDirection * 30000.f;
+
+				bSuccessHit = GetWorld()->LineTraceSingleByChannel(LastCommandTraceResult, ClientCursorLocation, TraceEnd, ECC_Visibility);
+				CommandTraceResult = { LastCommandTraceResult };
+			}
 		}
-	}
-
-	if (bTraceFromCursor && PC)
-	{
-		FVector TraceStart;
-		FVector TraceDirection;
-		PC->DeprojectMousePositionToWorld(TraceStart, TraceDirection);
-		const FVector TraceEnd = TraceStart + TraceDirection * 30000.f;
-
-		bSuccessHit = GetWorld()->LineTraceSingleByChannel(LastCommandTraceResult, TraceStart, TraceEnd, ECC_Visibility);
-		CommandTraceResult = { LastCommandTraceResult };
 	}
 	else if (TraceFromComponent.IsValid())
 	{
@@ -65,14 +57,25 @@ UMassCommanderComponent::UMassCommanderComponent()
 
 void UMassCommanderComponent::ReceiveCommandInputAction()
 {
+	FVector_NetQuantize ClientCursorLocation, ClientCursorDirection = FVector::ZeroVector;
+	bool bTraceFromCursor = false;
+	if (APawn* OwnerPawn = Cast<APawn>(GetOwner()))
+	{
+		if (APlayerController* PC = OwnerPawn->GetController<APlayerController>())
+		{
+			bTraceFromCursor = PC->bShowMouseCursor;
+			PC->DeprojectMousePositionToWorld(ClientCursorLocation, ClientCursorDirection);
+		}
+	}
+
 	K2_ReceiveCommandInputAction();
 
-	ServerProcessInputAction();
+	ServerProcessInputAction(ClientCursorLocation, ClientCursorDirection, bTraceFromCursor);
 }
 
-void UMassCommanderComponent::ServerProcessInputAction_Implementation()
+void UMassCommanderComponent::ServerProcessInputAction_Implementation(FVector_NetQuantize ClientCursorLocation, FVector_NetQuantize ClientCursorDirection, bool bTraceFromCursor)
 {
-	RaycastCommandTarget();
+	RaycastCommandTarget(ClientCursorLocation, ClientCursorDirection, bTraceFromCursor);
 	K2_ServerProcessInputAction();
 	OnCommandProcessedDelegate.Broadcast(CommandTraceResult);
 }
