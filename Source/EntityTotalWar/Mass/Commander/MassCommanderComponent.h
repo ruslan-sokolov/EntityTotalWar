@@ -52,7 +52,7 @@ public:
 	void ReceiveCommandInputAction();
 
 	UFUNCTION(Server, Reliable)
-	void ServerProcessInputAction(FVector_NetQuantize ClientCursorLocation, FVector_NetQuantize ClientCursorDirection, bool bTraceFromCursor);
+	void ServerProcessInputAction(FVector_NetQuantize ClientCursorLocation, FVector_NetQuantizeNormal ClientCursorDirection, bool bTraceFromCursor);
 
 	UFUNCTION(BlueprintImplementableEvent)
 	void K2_ServerProcessInputAction();

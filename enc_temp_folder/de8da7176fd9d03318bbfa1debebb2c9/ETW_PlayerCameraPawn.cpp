@@ -162,7 +162,7 @@ void AETW_PlayerCameraPawn::OnApplyAction_Released()
 {
 	bApplyActionIsPressed = false;
 
-	if (Velocity.Size() <= 20.f && GetController())
+	if (Velocity.Size() <= 20.f)
 	{
 		ensure(MassCommanderComp);
 		MassCommanderComp->ReceiveCommandInputAction();

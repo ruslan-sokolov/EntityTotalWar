@@ -68,6 +68,15 @@ void UMassCommanderComponent::ReceiveCommandInputAction()
 		}
 	}
 
+	float HalfHeight = 500.f;
+	float Radius = 100.f;
+	//FVector Origin = ClientCursorLocation + ClientCursorDirection * (Radius + HalfHeight);
+	FVector Origin = ClientCursorLocation;
+	FQuat Rotation = ClientCursorDirection.ToOrientationQuat();
+
+	//DrawDebugCapsule(GetWorld(), Origin, HalfHeight, Radius, Rotation, FColor::Orange, false, 10.f);
+	DrawDebugLine(GetWorld(), Origin, Origin+ClientCursorDirection*1000.f, FColor::Orange, false, 10.f);
+
 	K2_ReceiveCommandInputAction();
 
 	ServerProcessInputAction(ClientCursorLocation, ClientCursorDirection, bTraceFromCursor);
