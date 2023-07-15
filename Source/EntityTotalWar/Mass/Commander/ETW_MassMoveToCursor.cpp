@@ -15,6 +15,55 @@
 #include <Translators/MassCharacterMovementTranslators.h>
 #include "GameFramework/CharacterMovementComponent.h"
 #include "MassCommands.h"
+#include "MassEntityView.h"
+#include "DrawDebugHelpers.h"
+
+namespace ETW
+{
+	bool bDebugMoveToCursor = false;
+	FAutoConsoleVariableRef CVarbDebugReplication(TEXT("etw.debug.moveToCursor"), bDebugMoveToCursor, TEXT("Draw Move To Cursor"), ECVF_Cheat);
+
+#if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
+	// @todo provide a better way of selecting agents to debug
+	constexpr int32 MaxAgentsDraw = 300;
+
+	void DebugMoveToCursorAgent(FMassEntityHandle Entity, const FMassEntityManager& EntityManager, float Radius = 100.f)
+	{
+		if (!bDebugMoveToCursor)
+		{
+			return;
+		}
+
+		static const FVector DebugCylinderHeight = FVector(0.f, 0.f, 200.f);
+
+		const FMassEntityView EntityView(EntityManager, Entity);
+
+		const FTransformFragment& TransformFragment = EntityView.GetFragmentData<FTransformFragment>();
+		const FMassMoveToCursorCommanderFragment& CommanderFragment = EntityView.GetFragmentData<FMassMoveToCursorCommanderFragment>();
+		const FMassMoveToCursorFragment& MoveToCursorFragment = EntityView.GetFragmentData<FMassMoveToCursorFragment>();
+		const FMassVelocityFragment& VelocityFragment = EntityView.GetFragmentData<FMassVelocityFragment>();
+
+		const FVector& Pos = TransformFragment.GetTransform().GetLocation();
+		const FVector& Target = MoveToCursorFragment.Target;
+		const FVector& Velocity = VelocityFragment.Value;
+
+
+
+		FAgentRadiusFragment* RadiusFragment = EntityView.GetFragmentDataPtr<FAgentRadiusFragment>();
+		if (RadiusFragment)
+		{
+			Radius = RadiusFragment->Radius;
+		}
+
+		const UWorld* World = EntityManager.GetWorld();
+		float WorldDeltaSec = World->GetDeltaSeconds();
+		
+		DrawDebugSphere(World, Pos, Radius, 16, FColor::Green, false, WorldDeltaSec * 2);
+		DrawDebugSphere(World, Target, Radius, 16, FColor::Turquoise, false, WorldDeltaSec * 2);
+		DrawDebugDirectionalArrow(World, Pos, Pos + Velocity, 30.f, FColor::Turquoise, false, WorldDeltaSec * 2);
+	}
+#endif // WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
+}
 
 void UETW_MassMoveToCursorTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext,
 	const UWorld& World) const
@@ -26,6 +75,8 @@ void UETW_MassMoveToCursorTrait::BuildTemplate(FMassEntityTemplateBuildContext& 
 	//BuildContext.RequireFragment<FMassMovementParameters>();
 	
 	BuildContext.AddFragment<FMassMoveToCursorFragment>();
+	BuildContext.AddFragment<FMassMoveToCursorCommanderFragment>();
+	BuildContext.AddFragment<FCharacterMovementComponentWrapperFragment>();
 
 	FMassEntityManager& EntityManager = UE::Mass::Utils::GetEntityManagerChecked(World);
 	
@@ -37,13 +88,14 @@ UETW_MassMoveToCursorProcessor::UETW_MassMoveToCursorProcessor()
 	: EntityQuery(*this)
 {
 	bAutoRegisterWithProcessingPhases = true;
-	ExecutionFlags = (int32)(EProcessorExecutionFlags::Server | EProcessorExecutionFlags::Standalone);
+	//ExecutionFlags = (int32)(EProcessorExecutionFlags::Server | EProcessorExecutionFlags::Standalone);
+	ExecutionFlags = (int32)(EProcessorExecutionFlags::All);
 	ExecutionOrder.ExecuteBefore.Add(UE::Mass::ProcessorGroupNames::Avoidance);
 }
 
 void UETW_MassMoveToCursorProcessor::ConfigureQueries()
 {
-	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadWrite);
+	EntityQuery.AddRequirement<FTransformFragment>(EMassFragmentAccess::ReadOnly);
 	
 	EntityQuery.AddRequirement<FMassVelocityFragment>(EMassFragmentAccess::ReadWrite);
 	//EntityQuery.AddRequirement<FMassForceFragment>(EMassFragmentAccess::ReadWrite);
@@ -70,16 +122,31 @@ void UETW_MassMoveToCursorProcessor::Execute(FMassEntityManager& EntityManager, 
 		
 			const TArrayView<FMassVelocityFragment> VelocityList = Context.GetMutableFragmentView<FMassVelocityFragment>();
 			//const TArrayView<FMassForceFragment> ForceList = Context.GetMutableFragmentView<FMassForceFragment>();
-			const TArrayView<FTransformFragment> TransformList = Context.GetMutableFragmentView<FTransformFragment>();
+			const TConstArrayView<FTransformFragment> TransformList = Context.GetFragmentView<FTransformFragment>();
 			const TArrayView<FMassMoveToCursorFragment> MoveToCursorList = Context.GetMutableFragmentView<FMassMoveToCursorFragment>();
 			const TArrayView<FMassMoveToCursorCommanderFragment> MoveToCursorCommanderList = Context.GetMutableFragmentView<FMassMoveToCursorCommanderFragment>();
 
+			FMassEntityManager& EntityManager = Context.GetEntityManagerChecked();
+
 			for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
 			{
-				UMassCommanderComponent* CommanderComp = MoveToCursorCommanderList[EntityIndex].CommanderComp;
-				if (!CommanderComp)
+				FMassMoveToCursorCommanderFragment& CommanderFragment = MoveToCursorCommanderList[EntityIndex];
+				if (!CommanderFragment.CommanderComp)
 				{
-					continue;
+					bool FoundCommanderComp = false;
+					if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(EntityManager.GetWorld(), 0))
+					{
+						if (UMassCommanderComponent* CommanderComp = PlayerPawn->GetComponentByClass<UMassCommanderComponent>())
+						{
+							FoundCommanderComp = true;
+							CommanderFragment = FMassMoveToCursorCommanderFragment(CommanderComp);
+						};
+					}
+
+					if (!FoundCommanderComp)
+					{
+						continue;
+					}
 				}
 
 				float EntitySpeed = Speed;
@@ -92,7 +159,7 @@ void UETW_MassMoveToCursorProcessor::Execute(FMassEntityManager& EntityManager, 
 
 				//FVector& Force = ForceList[EntityIndex].Value;
 				FVector& Velocity = VelocityList[EntityIndex].Value;
-				FTransform& Transform = TransformList[EntityIndex].GetMutableTransform();
+				const FTransform& Transform = TransformList[EntityIndex].GetTransform();
 				const FVector& CurrentLocation = Transform.GetLocation();
 				FVector& TargetLocation = MoveToCursor.Target;
 
@@ -103,12 +170,13 @@ void UETW_MassMoveToCursorProcessor::Execute(FMassEntityManager& EntityManager, 
 					Velocity = FVector::Zero();
 					MoveToCursor.Timer = 0.f;
 
-					MoveToCursor.Target = CommanderComp->GetCommandLocation();
+					MoveToCursor.Target = CommanderFragment.CommanderComp->GetCommandLocation();
 					//// deferred:
 					//Context.Defer().PushCommand<FMassDeferredChangeCompositionCommand>([&MoveToCursor, CommanderComp](FMassEntityManager& Manager){
 					//	//NavigationSubsystem->EntityRequestNewPath(EntityHandle, PathFollowParams, InitialLocation, NewMoveToLocation, PathFragment);
 					//	MoveToCursor.Target = CommanderComp->GetCommandLocation();
 					//});
+
 				}
 				else
 				{
@@ -117,8 +185,12 @@ void UETW_MassMoveToCursorProcessor::Execute(FMassEntityManager& EntityManager, 
 					Direction.Z = 0.f;
 					Direction.Normalize();
 					Velocity = Direction * Speed;
-					Transform.SetRotation(Direction.ToOrientationQuat());
+					//Transform.SetRotation(Direction.ToOrientationQuat());
 				}
+
+				#if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
+				ETW::DebugMoveToCursorAgent(Context.GetEntity(EntityIndex), EntityManager);
+				#endif // WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 				
 			}
 		}));
@@ -137,7 +209,8 @@ UETW_MassMoveToCursorInitializer::UETW_MassMoveToCursorInitializer()
 void UETW_MassMoveToCursorInitializer::Register()
 {
 	check(ObservedType);
-	UMassObserverRegistry::GetMutable().RegisterObserver(*ObservedType, Operation, GetClass());
+	// DEPRECATED
+	//UMassObserverRegistry::GetMutable().RegisterObserver(*ObservedType, Operation, GetClass());
 }
 
 void UETW_MassMoveToCursorInitializer::ConfigureQueries()

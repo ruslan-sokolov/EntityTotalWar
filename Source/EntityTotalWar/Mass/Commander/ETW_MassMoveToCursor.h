@@ -15,6 +15,13 @@ struct FMassMoveToCursorCommanderFragment : public FObjectWrapperFragment
 {
 	GENERATED_BODY()
 	TObjectPtr<class UMassCommanderComponent> CommanderComp;
+
+	FMassMoveToCursorCommanderFragment() = default;
+
+	explicit FMassMoveToCursorCommanderFragment(UMassCommanderComponent* CommanderComponent)
+	{
+		CommanderComp = CommanderComponent;
+	}
 };
 
 USTRUCT()
