@@ -91,6 +91,11 @@ void UMassCommanderComponent::InitializeComponent()
 {
 	Super::InitializeComponent();
 	SetTraceFromComponent(GetOwner()->GetComponentByClass<UCameraComponent>());
+
+	if (APlayerController* PC_ = Cast<APlayerController>(GetOwner()->GetOwner()))
+	{
+		PC = PC_;
+	}
 }
 
 void UMassCommanderComponent::OnRep_CommandTraceResult()

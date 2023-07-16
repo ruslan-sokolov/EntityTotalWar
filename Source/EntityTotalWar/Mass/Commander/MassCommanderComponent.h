@@ -65,6 +65,9 @@ public:
 	UPROPERTY(BlueprintAssignable)
 	FOnCommandProcessedDelegate OnCommandProcessedDelegate;
 
+	UPROPERTY(BlueprintReadOnly)
+	APlayerController* PC;
+
 	UFUNCTION(BlueprintCallable)
 	const FVector& GetCommandLocation() const { return CommandTraceResult.Trace.Location; }
 

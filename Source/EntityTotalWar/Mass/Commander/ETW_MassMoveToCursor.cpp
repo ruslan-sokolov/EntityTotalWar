@@ -131,7 +131,7 @@ void UETW_MassMoveToCursorProcessor::Execute(FMassEntityManager& EntityManager, 
 			for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
 			{
 				FMassMoveToCursorCommanderFragment& CommanderFragment = MoveToCursorCommanderList[EntityIndex];
-				if (!CommanderFragment.CommanderComp)
+				//if (!CommanderFragment.CommanderComp)
 				{
 					bool FoundCommanderComp = false;
 					if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(EntityManager.GetWorld(), 0))
