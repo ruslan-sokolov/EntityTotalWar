@@ -4,7 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "EnvironmentQuery/EnvQueryManager.h"
+#include "EnvironmentQuery/EnvQueryInstanceBlueprintWrapper.h"
+#include "EnvironmentQuery/EnvQueryTypes.h"
+#include "ETW_MassTypes.h"
+#include "MassEntitySpawnDataGeneratorBase.h"
+
 #include "MassCommanderComponent.generated.h"
+
+struct MASSSPAWNER_API FMassSpawnedEntityType;
 
 USTRUCT(BlueprintType, Blueprintable)
 struct ENTITYTOTALWAR_API FMassCommanderCommandTrace
@@ -71,11 +79,19 @@ public:
 	UFUNCTION(BlueprintCallable)
 	const FVector& GetCommandLocation() const { return CommandTraceResult.Trace.Location; }
 
+	UFUNCTION(BlueprintCallable, Server, Reliable)
+	void SpawnSquad(UMassEntityConfigAsset* EntityTemplate, int32 NumToSpawn, UMassEntityEQSSpawnPointsGenerator* PointGenerator);
+
+	void OnSpawnQueryGeneratorFinished(TConstArrayView<FMassEntitySpawnDataGeneratorResult> Results);
+	
 	// try to find player camera component
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 	void SetTraceFromComponent(USceneComponent* InTraceFromComponent);
 
 protected:
+	UPROPERTY()
+	TArray<FMassSpawnedEntityType> PendingSpawnEntityTypes;
+	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	virtual void InitializeComponent() override;

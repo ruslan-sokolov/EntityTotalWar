@@ -2,8 +2,16 @@
 
 
 #include "MassCommanderComponent.h"
+
+#include "MassEntityConfigAsset.h"
+#include "MassEntityEQSSpawnPointsGenerator.h"
+#include "Math/RandomStream.h"
+#include "MassSpawnerSubsystem.h"
+#include "MassSpawnerTypes.h"
 #include "Camera/CameraComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "VisualLogger/VisualLogger.h"
+#include "MassEntityConfigAsset.h"
 
 void UMassCommanderComponent::SetTraceFromComponent_Implementation(USceneComponent* InTraceFromComponent)
 {
@@ -21,7 +29,7 @@ bool UMassCommanderComponent::RaycastCommandTarget(const FVector& ClientCursorLo
 	{
 		if (APawn* OwnerPawn = Cast<APawn>(GetOwner()))
 		{
-			if (APlayerController* PC = OwnerPawn->GetController<APlayerController>())
+			if (APlayerController* PC_ = OwnerPawn->GetController<APlayerController>())
 			{
 				const FVector TraceEnd = ClientCursorLocation + ClientCursorDirection * 30000.f;
 
@@ -61,10 +69,10 @@ void UMassCommanderComponent::ReceiveCommandInputAction()
 	bool bTraceFromCursor = false;
 	if (APawn* OwnerPawn = Cast<APawn>(GetOwner()))
 	{
-		if (APlayerController* PC = OwnerPawn->GetController<APlayerController>())
+		if (APlayerController* PC_ = OwnerPawn->GetController<APlayerController>())
 		{
-			bTraceFromCursor = PC->bShowMouseCursor;
-			PC->DeprojectMousePositionToWorld(ClientCursorLocation, ClientCursorDirection);
+			bTraceFromCursor = PC_->bShowMouseCursor;
+			PC_->DeprojectMousePositionToWorld(ClientCursorLocation, ClientCursorDirection);
 		}
 	}
 
@@ -78,6 +86,60 @@ void UMassCommanderComponent::ServerProcessInputAction_Implementation(FVector_Ne
 	RaycastCommandTarget(ClientCursorLocation, ClientCursorDirection, bTraceFromCursor);
 	K2_ServerProcessInputAction();
 	OnCommandProcessedDelegate.Broadcast(CommandTraceResult);
+}
+
+void UMassCommanderComponent::SpawnSquad_Implementation(UMassEntityConfigAsset* EntityTemplate, int32 NumToSpawn, UMassEntityEQSSpawnPointsGenerator* PointGenerator)
+{
+	if (!EntityTemplate)
+	{
+		UE_LOG(ETW_Mass, Error, TEXT("Entity template or environment query not set!"));
+		return;
+	}
+
+	FMassSpawnedEntityType EntityType;
+	EntityType.EntityConfig = EntityTemplate;
+	EntityType.Proportion = 1.f;
+	PendingSpawnEntityTypes.Add(EntityType);
+
+	FFinishedGeneratingSpawnDataSignature Delegate = FFinishedGeneratingSpawnDataSignature::CreateUObject(this, &UMassCommanderComponent::OnSpawnQueryGeneratorFinished);
+	PointGenerator->Generate(*GetOwner(), TArrayView<FMassSpawnedEntityType>(PendingSpawnEntityTypes), NumToSpawn, Delegate);
+}
+
+void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMassEntitySpawnDataGeneratorResult> Results)
+{
+	UMassSpawnerSubsystem* SpawnerSystem = UWorld::GetSubsystem<UMassSpawnerSubsystem>(GetWorld());
+
+	if (SpawnerSystem == nullptr)
+	{
+		UE_VLOG_UELOG(this, ETW_Mass, Error, TEXT("UMassSpawnerSubsystem missing while trying to spawn entities"));
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	check(World);
+
+	for (const FMassEntitySpawnDataGeneratorResult& Result : Results)
+	{
+		if (Result.NumEntities <= 0)
+		{
+			continue;
+		}
+		
+		check(PendingSpawnEntityTypes.IsValidIndex(Result.EntityConfigIndex));
+		check(Result.SpawnDataProcessor != nullptr);
+		
+		FMassSpawnedEntityType& EntityType = PendingSpawnEntityTypes[Result.EntityConfigIndex];
+
+		if (UMassEntityConfigAsset* EntityConfig = EntityType.EntityConfig.LoadSynchronous())
+		{
+			const FMassEntityTemplate& EntityTemplate = EntityConfig->GetOrCreateEntityTemplate(*World);
+			if (EntityTemplate.IsValid())
+			{
+				TArray<FMassEntityHandle> OutEntities;
+				SpawnerSystem->SpawnEntities(EntityTemplate.GetTemplateID(), Result.NumEntities, Result.SpawnData, Result.SpawnDataProcessor, OutEntities);
+			}
+		}
+	}
 }
 
 void UMassCommanderComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
