@@ -47,6 +47,8 @@ struct ENTITYTOTALWAR_API FMassCommanderCommandTrace
 //};
 
 
+
+
 UCLASS(ClassGroup=(Custom), Blueprintable, meta=(BlueprintSpawnableComponent))
 class ENTITYTOTALWAR_API UMassCommanderComponent : public UActorComponent
 {
@@ -79,9 +81,14 @@ public:
 	UFUNCTION(BlueprintCallable)
 	const FVector& GetCommandLocation() const { return CommandTraceResult.Trace.Location; }
 
-	UFUNCTION(BlueprintCallable, Server, Reliable)
-	void SpawnSquad(UMassEntityConfigAsset* EntityTemplate, int32 NumToSpawn, UMassEntityEQSSpawnPointsGenerator* PointGenerator);
+	UFUNCTION(BlueprintCallable)
+	void SpawnSquad(TSoftObjectPtr<UMassEntityConfigAsset> EntityTemplate, int32 NumToSpawn, TSoftClassPtr<UMassEntityEQSSpawnPointsGenerator> PointGenerator);
 
+	UPROPERTY(EditDefaultsOnly)
+	TArray<TSoftObjectPtr<UMassEntityConfigAsset>> PreLoadTemplates;
+
+	
+	
 	void OnSpawnQueryGeneratorFinished(TConstArrayView<FMassEntitySpawnDataGeneratorResult> Results);
 	
 	// try to find player camera component
@@ -89,12 +96,19 @@ public:
 	void SetTraceFromComponent(USceneComponent* InTraceFromComponent);
 
 protected:
+	virtual void BeginPlay() override;
+	
+	virtual void InitializeComponent() override;
+	
+	void RegisterEntityTemplates();
+	
+	UFUNCTION(BlueprintCallable, Server, Reliable)
+	void Server_SpawnSquad(FSoftObjectPath EntityTemplatePath, int32 NumToSpawn, FSoftObjectPath PointGeneratorPath);
+	
 	UPROPERTY()
 	TArray<FMassSpawnedEntityType> PendingSpawnEntityTypes;
 	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-
-	virtual void InitializeComponent() override;
 
 	UPROPERTY(EditDefaultsOnly)
 	// by default is player camera component

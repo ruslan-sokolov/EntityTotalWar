@@ -61,6 +61,7 @@ UMassCommanderComponent::UMassCommanderComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	SetIsReplicatedByDefault(true);
+	bWantsInitializeComponent = true;
 }
 
 void UMassCommanderComponent::ReceiveCommandInputAction()
@@ -88,21 +89,61 @@ void UMassCommanderComponent::ServerProcessInputAction_Implementation(FVector_Ne
 	OnCommandProcessedDelegate.Broadcast(CommandTraceResult);
 }
 
-void UMassCommanderComponent::SpawnSquad_Implementation(UMassEntityConfigAsset* EntityTemplate, int32 NumToSpawn, UMassEntityEQSSpawnPointsGenerator* PointGenerator)
+void UMassCommanderComponent::BeginPlay()
 {
-	if (!EntityTemplate)
-	{
-		UE_LOG(ETW_Mass, Error, TEXT("Entity template or environment query not set!"));
-		return;
-	}
+	Super::BeginPlay();
+	
+	RegisterEntityTemplates();
+}
 
+void UMassCommanderComponent::InitializeComponent()
+{
+	Super::InitializeComponent();
+	
+	SetTraceFromComponent(GetOwner()->GetComponentByClass<UCameraComponent>());
+
+	if (APlayerController* PC_ = Cast<APlayerController>(GetOwner()->GetOwner()))
+	{
+		PC = PC_;
+	}
+}
+
+void UMassCommanderComponent::RegisterEntityTemplates()
+{
+	UWorld* World = GetWorld();
+	check(World);
+	for (TSoftObjectPtr<UMassEntityConfigAsset>& ConfigAssetSoftRef : PreLoadTemplates)
+	{
+		if (const UMassEntityConfigAsset* EntityConfig = ConfigAssetSoftRef.LoadSynchronous())
+		{
+			EntityConfig->GetOrCreateEntityTemplate(*World);
+		}
+	}
+}
+
+void UMassCommanderComponent::Server_SpawnSquad_Implementation(FSoftObjectPath EntityTemplatePath, int32 NumToSpawn,  FSoftObjectPath PointGeneratorPath)
+{
+	UClass* PointGeneratorClass = StaticCast<UClass*>(PointGeneratorPath.TryLoad());
+	UMassEntityEQSSpawnPointsGenerator* SpawnPointGeneratorCDO = CastChecked<UMassEntityEQSSpawnPointsGenerator>(PointGeneratorClass->ClassDefaultObject);
+
+	UMassEntityConfigAsset* EntityConfig = StaticCast<UMassEntityConfigAsset*>(EntityTemplatePath.TryLoad());
+	EntityConfig->GetOrCreateEntityTemplate(*GetWorld());
+	
 	FMassSpawnedEntityType EntityType;
-	EntityType.EntityConfig = EntityTemplate;
+	EntityType.EntityConfig = EntityTemplatePath;
 	EntityType.Proportion = 1.f;
 	PendingSpawnEntityTypes.Add(EntityType);
 
+	
+	
 	FFinishedGeneratingSpawnDataSignature Delegate = FFinishedGeneratingSpawnDataSignature::CreateUObject(this, &UMassCommanderComponent::OnSpawnQueryGeneratorFinished);
-	PointGenerator->Generate(*GetOwner(), TArrayView<FMassSpawnedEntityType>(PendingSpawnEntityTypes), NumToSpawn, Delegate);
+	SpawnPointGeneratorCDO->Generate(*GetOwner(), TArrayView<FMassSpawnedEntityType>(PendingSpawnEntityTypes), NumToSpawn, Delegate);
+}
+
+void UMassCommanderComponent::SpawnSquad(TSoftObjectPtr<UMassEntityConfigAsset> EntityTemplate, int32 NumToSpawn,
+	TSoftClassPtr<UMassEntityEQSSpawnPointsGenerator> PointGenerator)
+{
+	Server_SpawnSquad(EntityTemplate.ToSoftObjectPath(), NumToSpawn, PointGenerator.ToSoftObjectPath());
 }
 
 void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMassEntitySpawnDataGeneratorResult> Results)
@@ -147,17 +188,6 @@ void UMassCommanderComponent::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(ThisClass, CommandTraceResult);
-}
-
-void UMassCommanderComponent::InitializeComponent()
-{
-	Super::InitializeComponent();
-	SetTraceFromComponent(GetOwner()->GetComponentByClass<UCameraComponent>());
-
-	if (APlayerController* PC_ = Cast<APlayerController>(GetOwner()->GetOwner()))
-	{
-		PC = PC_;
-	}
 }
 
 void UMassCommanderComponent::OnRep_CommandTraceResult()
