@@ -1,0 +1,50 @@
+
+
+/*
+squad
+	squad shared (initialized)
+	team frag
+	transform frag (target location)
+	
+
+
+	
+unit
+	unit fragment (initialized)
+	squad shared (initialized)
+	
+	
+squad shared
+	int32 squad index (initialized)
+	int32 squad target index
+	
+	formation
+	
+	
+unit fragment
+	int32 unit index (initialized)
+	formation offset
+	
+team fragment
+	int8 team index
+	
+	
+squad subsystem
+	squad manager
+	
+	
+squad manager
+	entity handle get squad entity (squad index)
+	array<entityhandle> get units entity (squad index)
+	
+	get squad entity from unit id (unit index)
+	
+	
+
+struct formation
+	FVector2D Box
+	
+	
+-------------------------processors:
+
+*/
