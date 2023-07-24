@@ -7,6 +7,15 @@
 
 #include "ETW_MassSquadSubsystem.generated.h"
 
+struct ENTITYTOTALWAR_API FMassSquadManager : public TSharedFromThis<FMassSquadManager>, public FGCObject
+{
+public:
+    
+	explicit FMassSquadManager();
+	FMassSquadManager(const FMassEntityManager& Other) = delete;
+	virtual ~FMassSquadManager();
+};
+
 
 /**
  * 
@@ -21,10 +30,18 @@ public:
 protected:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
+	
+	/** Called once all UWorldSubsystems have been initialized */
+	virtual void PostInitialize() override;
+	/** Called when world is ready to start gameplay before the game mode transitions to the correct state and call BeginPlay on all actors */
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
+	virtual void BeginDestroy() override;
 
 	/** Creates all runtime data using main collection */
 	void InitializeRuntime();
+	
+    
+    TSharedPtr<FMassSquadManager> SquadManager;
 };
 
 template<>

@@ -72,8 +72,9 @@ struct ENTITYTOTALWAR_API FETW_MassTeamFragment : public FMassFragment
 
 
 UENUM(BlueprintType, meta = (Bitflags, UseEnumValuesAsMaskValuesInEditor = "true"))
-enum EETW_FormationMovementMode : uint8
+enum class EETW_FormationMovementMode : uint8
 {
+	NONE	   = 0 UMETA(Hidden),
 	March = 1 << 0,
 	Advance = 1 << 1,
 	Sneak = 1 << 2
@@ -81,8 +82,9 @@ enum EETW_FormationMovementMode : uint8
 ENUM_CLASS_FLAGS(EETW_FormationMovementMode);
 
 UENUM(BlueprintType, meta = (Bitflags, UseEnumValuesAsMaskValuesInEditor = "true"))
-enum EETW_FormationType : uint8
+enum class EETW_FormationType : uint8
 {
+	NONE	   = 0 UMETA(Hidden),
 	Rectangle = 1 << 0,
 	Box = 1 << 1,
 	Circle = 1 << 2,
@@ -94,8 +96,9 @@ enum EETW_FormationType : uint8
 ENUM_CLASS_FLAGS(EETW_FormationType);
 
 UENUM(BlueprintType, meta = (Bitflags, UseEnumValuesAsMaskValuesInEditor = "true"))
-enum EETW_FormationDensity : uint8
+enum class EETW_FormationDensity : uint8
 {
+	NONE	   = 0 UMETA(Hidden),
 	Normal = 1 << 0,
 	Loose = 1 << 1,
 	Tight = 1 << 2
@@ -118,13 +121,13 @@ struct FETW_MassFormation
 	FMassInt16Real Speed;
 
 	UPROPERTY(EditAnywhere)
-	TEnumAsByte<EETW_FormationType> FormationType;
+	EETW_FormationType FormationType;
 
 	UPROPERTY(EditAnywhere)
-	TEnumAsByte<EETW_FormationDensity> FormationDensity;
+	EETW_FormationDensity FormationDensity;
 	
 	UPROPERTY(EditAnywhere)
-	TEnumAsByte<EETW_FormationMovementMode> FormationMovementMode;
+	EETW_FormationMovementMode FormationMovementMode;
 	
 };
 
