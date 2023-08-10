@@ -55,11 +55,21 @@ struct formation
 */
 
 USTRUCT()
+struct FMassSquadSpawnAuxData
+{
+	GENERATED_BODY()
+
+	TWeakObjectPtr<class UMassCommanderComponent> CommanderComp;
+	int8 TeamIndex;
+	FTransform SquadInitialTransform;
+};
+
+USTRUCT()
 struct ENTITYTOTALWAR_API FETW_MassUnitFragment : public FMassFragment
 {
 	GENERATED_BODY()
 
-	int32 UnitIndex;
+	uint32 UnitIndex;
 };
 
 USTRUCT()
@@ -112,23 +122,37 @@ struct FETW_MassFormation
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere)
-	int16 Length;
+	int16 Length = 16;
 
 	UPROPERTY(EditAnywhere)
-	FMassInt16Real DencityInterval;
+	FMassInt16Real DencityInterval = FMassInt16Real(100.f);
 	
 	UPROPERTY(EditAnywhere)
-	FMassInt16Real Speed;
+	FMassInt16Real Speed = FMassInt16Real(160.f);
 
 	UPROPERTY(EditAnywhere)
-	EETW_FormationType FormationType;
+	EETW_FormationType FormationType = EETW_FormationType::Rectangle;
 
 	UPROPERTY(EditAnywhere)
-	EETW_FormationDensity FormationDensity;
+	EETW_FormationDensity FormationDensity = EETW_FormationDensity::Normal;
 	
 	UPROPERTY(EditAnywhere)
-	EETW_FormationMovementMode FormationMovementMode;
+	EETW_FormationMovementMode FormationMovementMode = EETW_FormationMovementMode::March;
 	
+};
+
+USTRUCT()
+struct FETW_MassSquadCommanderFragment : public FObjectWrapperFragment
+{
+	GENERATED_BODY()
+	TObjectPtr<class UMassCommanderComponent> CommanderComp;
+
+	FETW_MassSquadCommanderFragment() = default;
+
+	explicit FETW_MassSquadCommanderFragment(UMassCommanderComponent* CommanderComponent)
+	{
+		CommanderComp = CommanderComponent;
+	}
 };
 
 USTRUCT()
@@ -136,15 +160,16 @@ struct ENTITYTOTALWAR_API FETW_MassSquadSharedFragment : public FMassSharedFragm
 {
 	GENERATED_BODY()
 
-	int32 SquadIndex;
-	int32 TargetSquadIndex;
+	uint32 SquadIndex = 0;
+	uint32 TargetSquadIndex = 0;
+	
 
 	FETW_MassFormation Formation;
 };
 
 
 USTRUCT(BlueprintType)
-struct ENTITYTOTALWAR_API FETW_MassSquadFormationParams : public FMassSharedFragment
+struct ENTITYTOTALWAR_API FETW_MassSquadParams : public FMassSharedFragment
 {
 	GENERATED_BODY()
 
@@ -177,4 +202,7 @@ struct ENTITYTOTALWAR_API FETW_MassSquadFormationParams : public FMassSharedFrag
 
 	UPROPERTY(EditAnywhere, meta=(Units="CentimetersPerSecond"))
 	float SneakSpeed = 200.f;
+
+	UPROPERTY(EditAnywhere, meta=(Units="CentimetersPerSecond"))
+	float CatchupSpeedFactor = 1.1f;
 };

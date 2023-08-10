@@ -4,7 +4,8 @@
 #include "ETW_MassSquadSubsystem.h"
 #include "MassSimulationSubsystem.h"
 
-FMassSquadManager::FMassSquadManager()
+FMassSquadManager::FMassSquadManager(UObject* InOwner)
+	: Owner(InOwner)
 {
 	
 }
@@ -14,39 +15,49 @@ FMassSquadManager::~FMassSquadManager()
 	
 }
 
+void FMassSquadManager::Initialize()
+{
+}
 
-;
+void FMassSquadManager::Deinitialize()
+{
+}
+
+void FMassSquadManager::AddReferencedObjects(FReferenceCollector& Collector)
+{
+}
+
+
+UETW_MassSquadSubsystem::UETW_MassSquadSubsystem()
+	: SquadManager(MakeShareable(new FMassSquadManager(this)))
+{
+	SquadPostSpawnProcessor = NewObject<UMassSquadPostSpawnProcessor>(this, UMassSquadPostSpawnProcessor::StaticClass());
+}
+
 void UETW_MassSquadSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
-	Super::Initialize(Collection);
-	Collection.InitializeDependency<UMassSimulationSubsystem>(); // todo: fix unresolved external link
+	Collection.InitializeDependency<UMassSimulationSubsystem>();
+	SquadManager->Initialize();
+
+	ensure(SquadPostSpawnProcessor);
+	SquadPostSpawnProcessor->Initialize(*this);
 }
 
 void UETW_MassSquadSubsystem::PostInitialize()
 {
-	
-	Super::PostInitialize();
 }
 
 void UETW_MassSquadSubsystem::Deinitialize()
 {
-	
-	Super::Deinitialize(); 	// should called at the end
+	SquadManager->Deinitialize();
 }
 
 void UETW_MassSquadSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
-	Super::OnWorldBeginPlay(InWorld);
-
 	InitializeRuntime();
-}
-
-void UETW_MassSquadSubsystem::BeginDestroy()
-{
-	
-	Super::BeginDestroy();
 }
 
 void UETW_MassSquadSubsystem::InitializeRuntime()
 {
 }
+

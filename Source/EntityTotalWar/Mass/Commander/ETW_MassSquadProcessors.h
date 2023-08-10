@@ -14,7 +14,7 @@ public:
 	virtual void BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const override;
 
 	UPROPERTY(EditAnywhere, Category = "Mass|Movement")
-	FETW_MassSquadSharedFragment Params;
+	FETW_MassSquadParams Params;
 };
 
 
@@ -33,5 +33,24 @@ protected:
 	virtual void ConfigureQueries() override;
 	virtual void Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context) override;
 
-	FMassEntityQuery EntityQuery;
+	FMassEntityQuery EntityQuery_Squad;
+	FMassEntityQuery EntityQuery_Unit;
 };
+
+UCLASS()
+class ENTITYTOTALWAR_API UMassSquadPostSpawnProcessor : public UMassProcessor
+{
+	GENERATED_BODY()
+
+public:
+	UMassSquadPostSpawnProcessor();
+
+protected:
+	virtual void ConfigureQueries() override;
+	virtual void Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context) override;
+
+	FMassEntityQuery EntityQuery_Unit;
+};
+
+
+// add squad spawn post process initializer with payload?

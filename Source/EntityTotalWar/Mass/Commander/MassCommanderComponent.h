@@ -47,7 +47,7 @@ struct ENTITYTOTALWAR_API FMassCommanderCommandTrace
 //};
 
 
-
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMassCommanderOnSquadSpawningFinishedEvent);
 
 UCLASS(ClassGroup=(Custom), Blueprintable, meta=(BlueprintSpawnableComponent))
 class ENTITYTOTALWAR_API UMassCommanderComponent : public UActorComponent
@@ -87,13 +87,17 @@ public:
 	UPROPERTY(EditDefaultsOnly)
 	TArray<TSoftObjectPtr<UMassEntityConfigAsset>> PreLoadTemplates;
 
-	
+	UPROPERTY(BlueprintAssignable)
+	FMassCommanderOnSquadSpawningFinishedEvent OnSquadSpawningFinishedEvent;
 	
 	void OnSpawnQueryGeneratorFinished(TConstArrayView<FMassEntitySpawnDataGeneratorResult> Results);
 	
 	// try to find player camera component
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 	void SetTraceFromComponent(USceneComponent* InTraceFromComponent);
+
+	UPROPERTY(BlueprintReadWrite)
+	int32 TeamIndex = 0;
 
 protected:
 	virtual void BeginPlay() override;
@@ -125,5 +129,6 @@ protected:
 
 	FHitResult LastCommandTraceResult;
 
+	
 	
 };

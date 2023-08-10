@@ -48,3 +48,12 @@ struct formation
 -------------------------processors:
 
 */
+
+
+check FMassTransformsSpawnData
+
+1) find a way to spawn units, initialize default and create squad entity for them
+
+2) replicate stuff
+
+3) handle CommanderComp -> Squad conections
