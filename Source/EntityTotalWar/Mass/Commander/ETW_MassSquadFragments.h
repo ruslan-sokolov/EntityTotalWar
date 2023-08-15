@@ -203,6 +203,6 @@ struct ENTITYTOTALWAR_API FETW_MassSquadParams : public FMassSharedFragment
 	UPROPERTY(EditAnywhere, meta=(Units="CentimetersPerSecond"))
 	float SneakSpeed = 200.f;
 
-	UPROPERTY(EditAnywhere, meta=(Units="CentimetersPerSecond"))
+	UPROPERTY(EditAnywhere)
 	float CatchupSpeedFactor = 1.1f;
 };

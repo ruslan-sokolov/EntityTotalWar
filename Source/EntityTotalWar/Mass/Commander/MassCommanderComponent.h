@@ -130,5 +130,6 @@ protected:
 	FHitResult LastCommandTraceResult;
 
 	
-	
+private:
+	bool bSquadEntitiesSpawnInProgress = false;
 };

@@ -31,10 +31,14 @@ public:
 
 protected:
 	virtual void ConfigureQueries() override;
+	virtual void Initialize(UObject& Owner) override;
 	virtual void Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context) override;
 
 	FMassEntityQuery EntityQuery_Squad;
 	FMassEntityQuery EntityQuery_Unit;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UETW_MassSquadSubsystem> SquadSubsystem = nullptr;
 };
 
 UCLASS()

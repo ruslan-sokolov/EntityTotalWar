@@ -31,7 +31,8 @@ void FMassSquadManager::AddReferencedObjects(FReferenceCollector& Collector)
 UETW_MassSquadSubsystem::UETW_MassSquadSubsystem()
 	: SquadManager(MakeShareable(new FMassSquadManager(this)))
 {
-	SquadPostSpawnProcessor = NewObject<UMassSquadPostSpawnProcessor>(this, UMassSquadPostSpawnProcessor::StaticClass());
+	const FString ObjectName = GetName() + TEXT("_MassSquadPostSpawnProc");
+	SquadPostSpawnProcessor = NewObject<UMassSquadPostSpawnProcessor>(this, UMassSquadPostSpawnProcessor::StaticClass(), FName(ObjectName));
 }
 
 void UETW_MassSquadSubsystem::Initialize(FSubsystemCollectionBase& Collection)

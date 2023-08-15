@@ -127,15 +127,26 @@ void UMassCommanderComponent::RegisterEntityTemplates()
 
 void UMassCommanderComponent::Server_SpawnSquad_Implementation(FSoftObjectPath EntityTemplatePath, int32 NumToSpawn,  FSoftObjectPath PointGeneratorPath)
 {
+	if (bSquadEntitiesSpawnInProgress)
+	{
+		UE_VLOG_UELOG(this, ETW_Mass, Error, TEXT("UMassCommanderComponent::Server_SpawnSquad_Implementation spawning squad allready in progress"));
+	}
+	
+	bSquadEntitiesSpawnInProgress = true;
+	
 	UClass* PointGeneratorClass = StaticCast<UClass*>(PointGeneratorPath.TryLoad());
 	UMassEntityEQSSpawnPointsGenerator* SpawnPointGeneratorCDO = CastChecked<UMassEntityEQSSpawnPointsGenerator>(PointGeneratorClass->ClassDefaultObject);
 
 	UMassEntityConfigAsset* EntityConfig = StaticCast<UMassEntityConfigAsset*>(EntityTemplatePath.TryLoad());
 	EntityConfig->GetOrCreateEntityTemplate(*GetWorld());
+
+	bool bHasSquadTrait = EntityConfig->GetConfig().GetTraits().FindByPredicate([](const UMassEntityTraitBase* Trait){return Trait->IsA<UETW_MassSquadTrait>(); }) != nullptr;
+	ensureMsgf(bHasSquadTrait, TEXT("%s has to squad trait Mass Commander Component can only spawn squads with squad trait!"), *EntityConfig->GetName());
 	
 	FMassSpawnedEntityType EntityType;
 	EntityType.EntityConfig = EntityTemplatePath;
 	EntityType.Proportion = 1.f;
+	PendingSpawnEntityTypes.Empty();
 	PendingSpawnEntityTypes.Add(EntityType);
 
 	
@@ -166,7 +177,8 @@ void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMas
 	if (Results.Num() > 1)
 	{
 		UE_VLOG_UELOG(this, ETW_Mass, Error, TEXT("UMassCommanderComponent::SpawnSquad supports only one archeotype to spawn"));
-		return;
+		
+		//return;
 	}
 	
 	TArray<FMassEntityHandle> SpawnedEntities;
@@ -225,8 +237,9 @@ void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMas
 		SpawnData.TeamIndex = TeamIndex;
 		SpawnData.CommanderComp = this;
 
-		FRotator SquadRotation = FRotationMatrix::MakeFromX(LastCommandTraceResult.TraceStart - LastCommandTraceResult.TraceEnd).Rotator();
-		SpawnData.SquadInitialTransform = FTransform(SquadRotation, LastCommandTraceResult.Location);
+		//FRotator SquadRotation = FRotationMatrix::MakeFromX(LastCommandTraceResult.TraceStart - LastCommandTraceResult.TraceEnd).Rotator();
+		//SpawnData.SquadInitialTransform = FTransform(SquadRotation, LastCommandTraceResult.Location);
+		SpawnData.SquadInitialTransform = GetOwner()->GetTransform();
 
 		// specify to run processors on newly spawned entities only
 		FMassArchetypeEntityCollection EntityCollection (ArchetypeHandle, SpawnedEntities, FMassArchetypeEntityCollection::NoDuplicates);
@@ -234,6 +247,7 @@ void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMas
 		UE::Mass::Executor::RunProcessorsView(Processors, ProcessingContext, &EntityCollection);
 	}
 
+	bSquadEntitiesSpawnInProgress = false;
 	OnSquadSpawningFinishedEvent.Broadcast();
 }
 
