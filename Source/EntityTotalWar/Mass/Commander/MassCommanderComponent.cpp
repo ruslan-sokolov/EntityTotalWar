@@ -177,7 +177,7 @@ void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMas
 	if (Results.Num() > 1)
 	{
 		UE_VLOG_UELOG(this, ETW_Mass, Error, TEXT("UMassCommanderComponent::SpawnSquad supports only one archeotype to spawn"));
-		
+		check(false);
 		//return;
 	}
 	
