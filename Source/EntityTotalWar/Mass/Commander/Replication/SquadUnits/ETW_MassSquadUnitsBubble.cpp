@@ -1,15 +1,15 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "ETW_MassSquadReplication.h"
+#include "ETW_MassSquadUnitsBubble.h"
+
 #include "Net/UnrealNetwork.h"
 
-namespace UE::Mass::Crowd
+namespace UE::Mass::Squad
 {
+	constexpr int32 MaxAgentsDraw = 300;
 
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
-	// @todo provide a better way of selecting agents to debug
-	constexpr int32 MaxAgentsDraw = 300;
 
 	void DebugDrawReplicatedAgent(FMassEntityHandle Entity, const FMassEntityManager& EntityManager, const float Radius = 50.f)
 	{
@@ -58,7 +58,7 @@ namespace UE::Mass::Crowd
 
 
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
-void FETW_MassSquadClientBubbleHandler::DebugValidateBubbleOnServer()
+void FETW_MassSquadUnitsClientBubbleHandler::DebugValidateBubbleOnServer()
 {
 	Super::DebugValidateBubbleOnServer();
 
@@ -69,17 +69,17 @@ void FETW_MassSquadClientBubbleHandler::DebugValidateBubbleOnServer()
 		const FMassEntityManager& EntityManager = Serializer->GetEntityManagerChecked();
 
 		// @todo cap at MaxAgentsDraw for now
-		const int32 MaxAgentsDraw = FMath::Min(UE::Mass::Crowd::MaxAgentsDraw, (*Agents).Num());
+		const int32 MaxAgentsDraw = FMath::Min(UE::Mass::Squad::MaxAgentsDraw, (*Agents).Num());
 
 		for (int32 Idx = 0; Idx < MaxAgentsDraw; ++Idx)
 		{
-			const FETW_MassSquadFastArrayItem& CrowdItem = (*Agents)[Idx];
+			const FETW_MassSquadUnitsFastArrayItem& CrowdItem = (*Agents)[Idx];
 
 			const FMassAgentLookupData& LookupData = AgentLookupArray[CrowdItem.GetHandle().GetIndex()];
 
 			check(LookupData.Entity.IsSet());
 
-			UE::Mass::Crowd::DebugDrawReplicatedAgent(LookupData.Entity, EntityManager);
+			UE::Mass::Squad::DebugDrawReplicatedAgent(LookupData.Entity, EntityManager);
 		}
 	}
 #endif // UE_REPLICATION_COMPILE_SERVER_CODE
@@ -88,7 +88,7 @@ void FETW_MassSquadClientBubbleHandler::DebugValidateBubbleOnServer()
 
 
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
-void FETW_MassSquadClientBubbleHandler::DebugValidateBubbleOnClient()
+void FETW_MassSquadUnitsClientBubbleHandler::DebugValidateBubbleOnClient()
 {
 	Super::DebugValidateBubbleOnClient();
 
@@ -100,17 +100,17 @@ void FETW_MassSquadClientBubbleHandler::DebugValidateBubbleOnClient()
 		check(ReplicationSubsystem);
 
 		// @todo cap at MaxAgentsDraw for now
-		const int32 MaxAgentsDraw = FMath::Min(UE::Mass::Crowd::MaxAgentsDraw, (*Agents).Num());
+		const int32 MaxAgentsDraw = FMath::Min(UE::Mass::Squad::MaxAgentsDraw, (*Agents).Num());
 
 		for (int32 Idx = 0; Idx < MaxAgentsDraw; ++Idx)
 		{
-			const FETW_MassSquadFastArrayItem& CrowdItem = (*Agents)[Idx];
+			const FETW_MassSquadUnitsFastArrayItem& CrowdItem = (*Agents)[Idx];
 
 			const FMassReplicationEntityInfo* EntityInfo = ReplicationSubsystem->FindMassEntityInfo(CrowdItem.Agent.GetNetID());
 
 			check(EntityInfo->Entity.IsSet());
 
-			UE::Mass::Crowd::DebugDrawReplicatedAgent(EntityInfo->Entity, EntityManager, 35.f);
+			UE::Mass::Squad::DebugDrawReplicatedAgent(EntityInfo->Entity, EntityManager, 35.f);
 		}
 	}
 }
@@ -118,7 +118,7 @@ void FETW_MassSquadClientBubbleHandler::DebugValidateBubbleOnClient()
 
 
 
-void FETW_MassSquadClientBubbleHandler::PostReplicatedAdd(const TArrayView<int32> AddedIndices, int32 FinalSize)
+void FETW_MassSquadUnitsClientBubbleHandler::PostReplicatedAdd(const TArrayView<int32> AddedIndices, int32 FinalSize)
 {
 	auto AddRequirementsForSpawnQuery = [this](FMassEntityQuery& InQuery)
 	{
@@ -130,12 +130,12 @@ void FETW_MassSquadClientBubbleHandler::PostReplicatedAdd(const TArrayView<int32
 		TransformHandler.CacheFragmentViewsForSpawnQuery(InExecContext);
 	};
 
-	auto SetSpawnedEntityData = [this](const FMassEntityView& EntityView, const FETW_MassSquadReplicatedAgent& ReplicatedEntity, const int32 EntityIdx)
+	auto SetSpawnedEntityData = [this](const FMassEntityView& EntityView, const FETW_MassReplicatedSquadUnitsAgent& ReplicatedEntity, const int32 EntityIdx)
 	{
 		TransformHandler.SetSpawnedEntityData(EntityIdx, ReplicatedEntity.GetReplicatedPositionYawData());
 	};
 
-	auto SetModifiedEntityData = [this](const FMassEntityView& EntityView, const FETW_MassSquadReplicatedAgent& Item)
+	auto SetModifiedEntityData = [this](const FMassEntityView& EntityView, const FETW_MassReplicatedSquadUnitsAgent& Item)
 	{
 		PostReplicatedChangeEntity(EntityView, Item);
 	};
@@ -145,9 +145,9 @@ void FETW_MassSquadClientBubbleHandler::PostReplicatedAdd(const TArrayView<int32
 	TransformHandler.ClearFragmentViewsForSpawnQuery();
 }
 
-void FETW_MassSquadClientBubbleHandler::PostReplicatedChange(const TArrayView<int32> ChangedIndices, int32 FinalSize)
+void FETW_MassSquadUnitsClientBubbleHandler::PostReplicatedChange(const TArrayView<int32> ChangedIndices, int32 FinalSize)
 {
-	auto SetModifiedEntityData = [this](const FMassEntityView& EntityView, const FETW_MassSquadReplicatedAgent& Item)
+	auto SetModifiedEntityData = [this](const FMassEntityView& EntityView, const FETW_MassReplicatedSquadUnitsAgent& Item)
 	{
 		PostReplicatedChangeEntity(EntityView, Item);
 	};
@@ -155,7 +155,7 @@ void FETW_MassSquadClientBubbleHandler::PostReplicatedChange(const TArrayView<in
 	PostReplicatedChangeHelper(ChangedIndices, SetModifiedEntityData);
 }
 
-void FETW_MassSquadClientBubbleHandler::PostReplicatedChangeEntity(const FMassEntityView& EntityView, const FETW_MassSquadReplicatedAgent& Item) const
+void FETW_MassSquadUnitsClientBubbleHandler::PostReplicatedChangeEntity(const FMassEntityView& EntityView, const FETW_MassReplicatedSquadUnitsAgent& Item) const
 {
 	TransformHandler.SetModifiedEntityData(EntityView, Item.GetReplicatedPositionYawData());
 }
@@ -182,66 +182,4 @@ void AETW_MassSquadClientBubbleInfo::OnRep_Serializer()
 	// hack fix query when only one arhcheotype and no updating valid archetypes cos last archeotype version in manager is same
 	//FMassEntityManager& EntityManager = Serializer.GetEntityManagerChecked();
 	//EntityManager.DebugForceArchetypeDataVersionBump();
-}
-
-
-void UETW_MassSquadReplicator::AddRequirements(FMassEntityQuery& EntityQuery)
-{
-	FMassReplicationProcessorPositionYawHandler::AddRequirements(EntityQuery);
-}
-
-void UETW_MassSquadReplicator::ProcessClientReplication(FMassExecutionContext& Context, FMassReplicationContext& ReplicationContext)
-{
-#if UE_REPLICATION_COMPILE_SERVER_CODE
-
-	FMassReplicationProcessorPositionYawHandler PositionYawHandler;
-	FMassReplicationSharedFragment* RepSharedFrag = nullptr;
-
-	auto CacheViewsCallback = [&RepSharedFrag, &PositionYawHandler](FMassExecutionContext& Context)
-	{
-		PositionYawHandler.CacheFragmentViews(Context);
-		RepSharedFrag = &Context.GetMutableSharedFragment<FMassReplicationSharedFragment>();
-		check(RepSharedFrag);
-	};
-
-	auto AddEntityCallback = [&RepSharedFrag, &PositionYawHandler](FMassExecutionContext& Context, const int32 EntityIdx, FETW_MassSquadReplicatedAgent& InReplicatedAgent, const FMassClientHandle ClientHandle)->FMassReplicatedAgentHandle
-	{
-		AETW_MassSquadClientBubbleInfo& BubbleInfo = RepSharedFrag->GetTypedClientBubbleInfoChecked<AETW_MassSquadClientBubbleInfo>(ClientHandle);
-
-		PositionYawHandler.AddEntity(EntityIdx, InReplicatedAgent.GetReplicatedPositionYawDataMutable());
-
-		return BubbleInfo.GetSerializer().Bubble.AddAgent(Context.GetEntity(EntityIdx), InReplicatedAgent);
-	};
-
-	auto ModifyEntityCallback = [&RepSharedFrag, &PositionYawHandler](FMassExecutionContext& Context, const int32 EntityIdx, const EMassLOD::Type LOD, const float Time, const FMassReplicatedAgentHandle Handle, const FMassClientHandle ClientHandle)
-	{
-		AETW_MassSquadClientBubbleInfo& BubbleInfo = RepSharedFrag->GetTypedClientBubbleInfoChecked<AETW_MassSquadClientBubbleInfo>(ClientHandle);
-
-		FETW_MassSquadClientBubbleHandler& Bubble = BubbleInfo.GetSerializer().Bubble;
-
-		const bool bLastClient = RepSharedFrag->CachedClientHandles.Last() == ClientHandle;
-
-		PositionYawHandler.ModifyEntity<FETW_MassSquadFastArrayItem>(Handle, EntityIdx, Bubble.GetTransformHandlerMutable());
-	};
-
-	auto RemoveEntityCallback = [&RepSharedFrag](FMassExecutionContext& Context, const FMassReplicatedAgentHandle Handle, const FMassClientHandle ClientHandle)
-	{
-		AETW_MassSquadClientBubbleInfo& BubbleInfo = RepSharedFrag->GetTypedClientBubbleInfoChecked<AETW_MassSquadClientBubbleInfo>(ClientHandle);
-
-		BubbleInfo.GetSerializer().Bubble.RemoveAgentChecked(Handle);
-	};
-
-	CalculateClientReplication<FETW_MassSquadFastArrayItem>(Context, ReplicationContext, CacheViewsCallback, AddEntityCallback, ModifyEntityCallback, RemoveEntityCallback);
-
-	// hack fix query when only one arhcheotype and no updating valid archetypes cos last archeotype version in manager is same
-	//Context.GetEntityManagerChecked().DebugForceArchetypeDataVersionBump();
-#endif // UE_REPLICATION_COMPILE_SERVER_CODE
-}
-
-
-
-UETW_MassSquadReplicationTrait::UETW_MassSquadReplicationTrait()
-{
-	Params.BubbleInfoClass = AETW_MassSquadClientBubbleInfo::StaticClass();
-	Params.ReplicatorClass = UETW_MassSquadReplicator::StaticClass();
 }

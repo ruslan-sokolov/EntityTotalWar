@@ -83,7 +83,7 @@ namespace UE::Mass::Squad
 			DrawDebugString(World, Pos, DbgString, nullptr, DebugColor, World->GetDeltaSeconds(), true);
 		}
 
-		if ((World->GetNetMode() == NM_DedicatedServer || World->GetNetMode() == NM_ListenServer) && UE::Mass::Squad::bDebugSquads_Server)
+		if ((World->GetNetMode() == NM_DedicatedServer || World->GetNetMode() == NM_ListenServer) && UE::Mass::Squad::bDebugSquadUnits_Server)
 		{
 			DrawDebugString(World, Pos + DebugCylinderHeight, DbgString, nullptr, DebugColor, World->GetDeltaSeconds(), true);
 		}
