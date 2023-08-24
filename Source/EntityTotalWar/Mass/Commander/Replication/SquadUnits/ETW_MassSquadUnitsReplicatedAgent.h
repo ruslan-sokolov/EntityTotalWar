@@ -3,6 +3,8 @@
 #pragma once
 
 #include "MassReplicationTransformHandlers.h"
+#include "ETW_MassSquadUnitsReplicationHandlers.h"
+
 #include "ETW_MassSquadUnitsReplicatedAgent.generated.h"
 
 
@@ -18,10 +20,17 @@ struct ENTITYTOTALWAR_API FETW_MassReplicatedSquadUnitsAgent : public FReplicate
 	/** This function is required to be provided in FReplicatedAgentBase derived classes that use FReplicatedAgentPositionYawData */
 	FReplicatedAgentPositionYawData& GetReplicatedPositionYawDataMutable() { return PositionYaw; }
 
-private:
+	const FETW_ReplicatedSquadUnitAgentData& GetReplicatedSquadUnitData() const { return UnitData; }
 
+	/** This function is required to be provided in FReplicatedAgentBase derived classes that use FETW_ReplicatedSquadUnitAgentData */
+	FETW_ReplicatedSquadUnitAgentData& GetReplicatedSquadUnitDataMutable() { return UnitData; }
+
+private:
 	UPROPERTY(Transient)
 	FReplicatedAgentPositionYawData PositionYaw;
+
+	UPROPERTY(Transient)
+	FETW_ReplicatedSquadUnitAgentData UnitData;
 };
 
 /** Fast array item for efficient agent replication. Remember to make this dirty if any FReplicatedCrowdAgent member variables are modified */

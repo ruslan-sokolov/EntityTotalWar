@@ -7,6 +7,7 @@
 #include "MassCommonFragments.h"
 #include "ETW_MassCollisionSubsystem.h"
 #include "MassEntityTemplateRegistry.h"
+#include "MassExecutionContext.h"
 
 UETW_MassCollisionObserver::UETW_MassCollisionObserver()
 	: CapsuleFragmentAddQuery(*this), CapsuleFragmentRemoveQuery(*this)
@@ -42,7 +43,7 @@ void UETW_MassCollisionObserver::Execute(FMassEntityManager& EntityManager, FMas
 
 	CapsuleFragmentAddQuery.ForEachEntityChunk(EntityManager, Context, [World](FMassExecutionContext Context)
 	{
-		UETW_MassCollisionSubsystem* CollisionSubsystem = Context.GetMutableSubsystem<UETW_MassCollisionSubsystem>(World);
+		UETW_MassCollisionSubsystem* CollisionSubsystem = Context.GetMutableSubsystem<UETW_MassCollisionSubsystem>();
 		const TConstArrayView<FTransformFragment> TransformList = Context.GetFragmentView<FTransformFragment>();
 		const TArrayView<FETW_MassCopsuleFragment> CapsuleList = Context.GetMutableFragmentView<FETW_MassCopsuleFragment>();
 		const TArrayView<FAgentRadiusFragment> AgentRadiusList = Context.GetMutableFragmentView<FAgentRadiusFragment>();
@@ -66,7 +67,7 @@ void UETW_MassCollisionObserver::Execute(FMassEntityManager& EntityManager, FMas
 
 	CapsuleFragmentRemoveQuery.ForEachEntityChunk(EntityManager, Context, [World](FMassExecutionContext Context)
 	{
-		UETW_MassCollisionSubsystem* CollisionSubsystem = Context.GetMutableSubsystem<UETW_MassCollisionSubsystem>(World);
+		UETW_MassCollisionSubsystem* CollisionSubsystem = Context.GetMutableSubsystem<UETW_MassCollisionSubsystem>();
 		
 		for (int32 EntityIndex = 0; EntityIndex < Context.GetNumEntities(); ++EntityIndex)
 		{

@@ -66,7 +66,7 @@ void UETW_MassPathFollowProcessor::Execute(FMassEntityManager& EntityManager, FM
 		const TArrayView<FMassMoveTargetFragment> MoveTargetFragList = Context.GetMutableFragmentView<FMassMoveTargetFragment>();
 		const TArrayView<FMassTargetLocationFragment> TargetLocationList = Context.GetMutableFragmentView<FMassTargetLocationFragment>();
 
-		UETW_MassNavigationSubsystem* NavigationSubsystem = Context.GetMutableSubsystem<UETW_MassNavigationSubsystem>(World);
+		UETW_MassNavigationSubsystem* NavigationSubsystem = Context.GetMutableSubsystem<UETW_MassNavigationSubsystem>();
 
 		const TConstArrayView<FCharacterMovementComponentWrapperFragment> MovementComponentList = Context.GetFragmentView<FCharacterMovementComponentWrapperFragment>();
 		bool bHasMovementComponent = MovementComponentList.Num() > 0;

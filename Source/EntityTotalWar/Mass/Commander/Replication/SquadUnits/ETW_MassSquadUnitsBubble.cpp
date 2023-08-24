@@ -123,16 +123,19 @@ void FETW_MassSquadUnitsClientBubbleHandler::PostReplicatedAdd(const TArrayView<
 	auto AddRequirementsForSpawnQuery = [this](FMassEntityQuery& InQuery)
 	{
 		TransformHandler.AddRequirementsForSpawnQuery(InQuery);
+		SquadUnitsHandler.AddRequirementsForSpawnQuery(InQuery);
 	};
 
 	auto CacheFragmentViewsForSpawnQuery = [this](FMassExecutionContext& InExecContext)
 	{
 		TransformHandler.CacheFragmentViewsForSpawnQuery(InExecContext);
+		SquadUnitsHandler.CacheFragmentViewsForSpawnQuery(InExecContext);
 	};
 
 	auto SetSpawnedEntityData = [this](const FMassEntityView& EntityView, const FETW_MassReplicatedSquadUnitsAgent& ReplicatedEntity, const int32 EntityIdx)
 	{
 		TransformHandler.SetSpawnedEntityData(EntityIdx, ReplicatedEntity.GetReplicatedPositionYawData());
+		SquadUnitsHandler.SetSpawnedEntityData(EntityView, ReplicatedEntity.GetReplicatedSquadUnitData(), EntityIdx);
 	};
 
 	auto SetModifiedEntityData = [this](const FMassEntityView& EntityView, const FETW_MassReplicatedSquadUnitsAgent& Item)

@@ -16,25 +16,28 @@ void UETW_MassSquadUnitsReplicator::ProcessClientReplication(FMassExecutionConte
 #if UE_REPLICATION_COMPILE_SERVER_CODE
 
 	FMassReplicationProcessorPositionYawHandler PositionYawHandler;
+	FMassReplicationProcessorSquadUnitHandler SquadUnitHandler;
 	FMassReplicationSharedFragment* RepSharedFrag = nullptr;
 
-	auto CacheViewsCallback = [&RepSharedFrag, &PositionYawHandler](FMassExecutionContext& Context)
+	auto CacheViewsCallback = [&RepSharedFrag, &PositionYawHandler, &SquadUnitHandler](FMassExecutionContext& Context)
 	{
 		PositionYawHandler.CacheFragmentViews(Context);
+		SquadUnitHandler.CacheFragmentViews(Context);
 		RepSharedFrag = &Context.GetMutableSharedFragment<FMassReplicationSharedFragment>();
 		check(RepSharedFrag);
 	};
 
-	auto AddEntityCallback = [&RepSharedFrag, &PositionYawHandler](FMassExecutionContext& Context, const int32 EntityIdx, FETW_MassReplicatedSquadUnitsAgent& InReplicatedAgent, const FMassClientHandle ClientHandle)->FMassReplicatedAgentHandle
+	auto AddEntityCallback = [&RepSharedFrag, &PositionYawHandler, &SquadUnitHandler](FMassExecutionContext& Context, const int32 EntityIdx, FETW_MassReplicatedSquadUnitsAgent& InReplicatedAgent, const FMassClientHandle ClientHandle)->FMassReplicatedAgentHandle
 	{
 		AETW_MassSquadClientBubbleInfo& BubbleInfo = RepSharedFrag->GetTypedClientBubbleInfoChecked<AETW_MassSquadClientBubbleInfo>(ClientHandle);
 
 		PositionYawHandler.AddEntity(EntityIdx, InReplicatedAgent.GetReplicatedPositionYawDataMutable());
+		SquadUnitHandler.AddEntity(EntityIdx, InReplicatedAgent.GetReplicatedSquadUnitDataMutable());
 
 		return BubbleInfo.GetSerializer().Bubble.AddAgent(Context.GetEntity(EntityIdx), InReplicatedAgent);
 	};
 
-	auto ModifyEntityCallback = [&RepSharedFrag, &PositionYawHandler](FMassExecutionContext& Context, const int32 EntityIdx, const EMassLOD::Type LOD, const float Time, const FMassReplicatedAgentHandle Handle, const FMassClientHandle ClientHandle)
+	auto ModifyEntityCallback = [&RepSharedFrag, &PositionYawHandler, &SquadUnitHandler](FMassExecutionContext& Context, const int32 EntityIdx, const EMassLOD::Type LOD, const float Time, const FMassReplicatedAgentHandle Handle, const FMassClientHandle ClientHandle)
 	{
 		AETW_MassSquadClientBubbleInfo& BubbleInfo = RepSharedFrag->GetTypedClientBubbleInfoChecked<AETW_MassSquadClientBubbleInfo>(ClientHandle);
 
@@ -43,6 +46,7 @@ void UETW_MassSquadUnitsReplicator::ProcessClientReplication(FMassExecutionConte
 		const bool bLastClient = RepSharedFrag->CachedClientHandles.Last() == ClientHandle;
 
 		PositionYawHandler.ModifyEntity<FETW_MassSquadUnitsFastArrayItem>(Handle, EntityIdx, Bubble.GetTransformHandlerMutable());
+		SquadUnitHandler.ModifyEntity(Handle, EntityIdx, Bubble.GetSquadUnitsHandlerMutable(), bLastClient);
 	};
 
 	auto RemoveEntityCallback = [&RepSharedFrag](FMassExecutionContext& Context, const FMassReplicatedAgentHandle Handle, const FMassClientHandle ClientHandle)

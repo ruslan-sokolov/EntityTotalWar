@@ -2,12 +2,11 @@
 
 #pragma once
 
-#include "MassReplicationPathHandlers.h"
-#include "MassReplicationTransformHandlers.h"
 #include "MassClientBubbleHandler.h"
 #include "MassClientBubbleInfoBase.h"
 #include "MassEntityView.h"
 #include "ETW_MassSquadUnitsReplicatedAgent.h"
+#include "ETW_MassSquadUnitsReplicationHandlers.h"
 
 #include "ETW_MassSquadUnitsBubble.generated.h"
 
@@ -16,23 +15,43 @@ namespace UE::Mass::Crowd
 	extern bool bDebugReplicationPositions;
 }
 
+class FETW_MassSquadUnitsClientBubbleHandler;
+
 class ENTITYTOTALWAR_API FETW_MassSquadUnitsClientBubbleHandler : public TClientBubbleHandlerBase<FETW_MassSquadUnitsFastArrayItem>
 {
 public:
+	//template<typename T>
+	//friend class TETW_MassClientBubbleSquadUnitHandler<FETW_MassSquadUnitsFastArrayItem>;
+	
 	typedef TClientBubbleHandlerBase<FETW_MassSquadUnitsFastArrayItem> Super;
 	typedef TMassClientBubbleTransformHandler<FETW_MassSquadUnitsFastArrayItem> FMassClientBubbleTransformHandler;
+	//typedef TETW_MassClientBubbleSquadUnitHandler<FETW_MassSquadUnitsFastArrayItem> FETW_MassClientBubbleSquadUnitHandler;
 
 	FETW_MassSquadUnitsClientBubbleHandler()
-		: TransformHandler(*this)
+		: TransformHandler(*this),
+		SquadUnitsHandler(*this)
 	{}
 
 #if UE_REPLICATION_COMPILE_SERVER_CODE
 
 	const FMassClientBubbleTransformHandler& GetTransformHandler() const { return TransformHandler; }
 	FMassClientBubbleTransformHandler& GetTransformHandlerMutable() { return TransformHandler; }
+
+	const TETW_MassClientBubbleSquadUnitHandler& GetSquadUnitsHandler() const { return SquadUnitsHandler; }
+	TETW_MassClientBubbleSquadUnitHandler& GetSquadUnitsHandlerMutable() { return SquadUnitsHandler; }
+
+	// protected inherited member accessor
+	FMassReplicatedAgentHandleManager& GetAgentHandleManager() { return AgentHandleManager; }
+	// protected inherited member accessor
+	TArray<FMassAgentLookupData> GetAgentLookuoArray() { return AgentLookupArray; }
+	
 #endif // UE_REPLICATION_COMPILE_SERVER_CODE
 
-
+	// protected inherited member accessor
+	FMassClientBubbleSerializerBase* GetSerializer() { return Serializer; }
+	// protected inherited member accessor
+	TArray<FETW_MassSquadUnitsFastArrayItem>* GetAgents() { return Agents; }
+	
 protected:
 #if UE_REPLICATION_COMPILE_CLIENT_CODE
 	virtual void PostReplicatedAdd(const TArrayView<int32> AddedIndices, int32 FinalSize) override;
@@ -47,6 +66,7 @@ protected:
 #endif // WITH_MASSGAMEPLAY_DEBUG
 
 	FMassClientBubbleTransformHandler TransformHandler;
+	TETW_MassClientBubbleSquadUnitHandler SquadUnitsHandler;
 };
 
 USTRUCT()

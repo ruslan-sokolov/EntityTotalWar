@@ -7,4 +7,4 @@
 #include "MassClientBubbleHandler.h"
 #include "MassCommonFragments.h"
 
-//#include "ETW_MassRepSquadSharedHandlers.generated.h"
+//#include "ETW_MassSquadReplicationHandlers.generated.h"
