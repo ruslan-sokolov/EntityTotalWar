@@ -9,6 +9,7 @@
 void UETW_MassSquadUnitsReplicator::AddRequirements(FMassEntityQuery& EntityQuery)
 {
 	FMassReplicationProcessorPositionYawHandler::AddRequirements(EntityQuery);
+	FMassReplicationProcessorSquadUnitHandler::AddRequirements(EntityQuery);
 }
 
 void UETW_MassSquadUnitsReplicator::ProcessClientReplication(FMassExecutionContext& Context, FMassReplicationContext& ReplicationContext)

@@ -163,23 +163,32 @@ void UMassCommanderComponent::SpawnSquad(TSoftObjectPtr<UMassEntityConfigAsset> 
 
 void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMassEntitySpawnDataGeneratorResult> Results)
 {
-	UWorld* World = GetWorld();
-	check(World);
-	
-	UMassSpawnerSubsystem* SpawnerSystem = UWorld::GetSubsystem<UMassSpawnerSubsystem>(World);
-
-	if (SpawnerSystem == nullptr)
-	{
-		UE_VLOG_UELOG(this, ETW_Mass, Error, TEXT("UMassSpawnerSubsystem missing while trying to spawn entities"));
-		return;
-	}
-
 	if (Results.Num() > 1)
 	{
 		UE_VLOG_UELOG(this, ETW_Mass, Error, TEXT("UMassCommanderComponent::SpawnSquad supports only one archeotype to spawn"));
 		check(false);
 		//return;
 	}
+	
+	UWorld* World = GetWorld();
+	check(World);
+
+	FMassEntityManager& EntityManager = UE::Mass::Utils::GetEntityManagerChecked(*World);
+
+	UMassSpawnerSubsystem* SpawnerSystem = UWorld::GetSubsystem<UMassSpawnerSubsystem>(World);
+	if (SpawnerSystem == nullptr)
+	{
+		UE_VLOG_UELOG(this, ETW_Mass, Error, TEXT("UMassSpawnerSubsystem missing while trying to spawn entities"));
+		return;
+	}
+		
+	UETW_MassSquadSubsystem* SquadSubsystem = World->GetSubsystem<UETW_MassSquadSubsystem>();
+	if (SpawnerSystem == nullptr)
+	{
+		UE_VLOG_UELOG(this, ETW_Mass, Error, TEXT("UETW_MassSquadSubsystem missing while trying to spawn squads!"));
+		return;
+	}
+	FMassSquadManager& SquadManager = SquadSubsystem->GetMutablSquadManager();
 	
 	TArray<FMassEntityHandle> SpawnedEntities;
 	FMassArchetypeHandle ArchetypeHandle;
@@ -202,21 +211,43 @@ void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMas
 			if (EntityTemplate.IsValid())
 			{
 				TArray<FMassEntityHandle> OutEntities;
-				ArchetypeHandle = EntityTemplate.GetArchetype();
-				SpawnerSystem->SpawnEntities(EntityTemplate.GetTemplateID(), Result.NumEntities, Result.SpawnData, Result.SpawnDataProcessor, OutEntities);
+
+				FMassArchetypeSharedFragmentValues MutableTemplateSharedFragments = EntityTemplate.GetSharedFragmentValues();  // shared fragments values struct copy
+				for (FSharedStruct& SharedStruct : MutableTemplateSharedFragments.GetMutableSharedFragments())
+				{
+					if (FETW_MassSquadSharedFragment* SquadSharedFragment = SharedStruct.GetMutablePtr<FETW_MassSquadSharedFragment>())
+					{
+						FETW_MassSquadSharedFragment SquadSharedFragment_UniquePerSquad;
+						SquadSharedFragment_UniquePerSquad.Formation = SquadSharedFragment->Formation;
+						SquadSharedFragment_UniquePerSquad.SquadIndex = SquadManager.GetSquadId();
+	
+						uint32 SquadSharedFragmentHash = UE::StructUtils::GetStructCrc32(FConstStructView::Make(SquadSharedFragment_UniquePerSquad), SquadSharedFragment_UniquePerSquad.SquadIndex);  // add crc to make hash different from default object 
+						FSharedStruct SquadSharedFragmentStruct = EntityManager.GetOrCreateSharedFragmentByHash<FETW_MassSquadSharedFragment>(SquadSharedFragmentHash, SquadSharedFragment_UniquePerSquad);
+						SharedStruct = SquadSharedFragmentStruct;  // make new shared fragment unique per squad and not archetype
+						break;
+					}
+				}
+				
+				TSharedRef<FMassEntityManager::FEntityCreationContext> CreationContext = EntityManager.BatchCreateEntities(EntityTemplate.GetArchetype(), MutableTemplateSharedFragments, Result.NumEntities, OutEntities);
+
+				TConstArrayView<FInstancedStruct> FragmentInstances = EntityTemplate.GetInitialFragmentValues();
+				EntityManager.BatchSetEntityFragmentsValues(CreationContext->GetEntityCollection(), FragmentInstances);
+
+				UMassProcessor* SpawnDataInitializer = Result.SpawnData.IsValid() ? SquadSubsystem->GetSpawnDataInitializer(Result.SpawnDataProcessor) : nullptr;
+				if (SpawnDataInitializer)
+				{
+					FMassProcessingContext ProcessingContext(EntityManager, /*TimeDelta=*/0.0f);
+					ProcessingContext.AuxData = Result.SpawnData;
+					UE::Mass::Executor::RunProcessorsView(MakeArrayView(&SpawnDataInitializer, 1), ProcessingContext, &CreationContext->GetEntityCollection());
+				}
+				
 				SpawnedEntities.Append(OutEntities);
 			}
 		}
 	}
-	
-	UETW_MassSquadSubsystem* MassSquadSubsystem = World->GetSubsystem<UETW_MassSquadSubsystem>();
-	if (SpawnerSystem == nullptr)
-	{
-		UE_VLOG_UELOG(this, ETW_Mass, Error, TEXT("UETW_MassSquadSubsystem missing while trying to spawn squads!"));
-		return;
-	}
 
-	UMassSquadPostSpawnProcessor* SquadPostSpawnProcessor = MassSquadSubsystem->GetSquadPostSpawnProcessor();
+	/* todo: Use Single Run Processor view in this function */
+	UMassSquadPostSpawnProcessor* SquadPostSpawnProcessor = SquadSubsystem->GetSquadPostSpawnProcessor();
 	if (SquadPostSpawnProcessor == nullptr)
 	{
 		UE_VLOG_UELOG(this, ETW_Mass, Error, TEXT("UMassSquadPostSpawnProcessor missing while trying to spawn squads!"));
@@ -224,11 +255,8 @@ void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMas
 	}
 	
 	TArray<UMassProcessor*> Processors { SquadPostSpawnProcessor };
-
 	if (Processors.Num() > 0 && World)
 	{
-		
-		FMassEntityManager& EntityManager = UE::Mass::Utils::GetEntityManagerChecked(*World);
 		FMassProcessingContext ProcessingContext(EntityManager, /*TimeDelta=*/0.0f);
 
 		// pass aux data to processor

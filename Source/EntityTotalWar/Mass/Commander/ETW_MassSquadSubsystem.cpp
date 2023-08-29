@@ -35,6 +35,30 @@ UETW_MassSquadSubsystem::UETW_MassSquadSubsystem()
 	SquadPostSpawnProcessor = NewObject<UMassSquadPostSpawnProcessor>(this, UMassSquadPostSpawnProcessor::StaticClass(), FName(ObjectName));
 }
 
+UMassProcessor* UETW_MassSquadSubsystem::GetSpawnDataInitializer(TSubclassOf<UMassProcessor> InitializerClass)
+{
+	if (!InitializerClass)
+	{
+		return nullptr;
+	}
+
+	TObjectPtr<UMassProcessor>* const Initializer = SpawnDataInitializers.FindByPredicate([InitializerClass](const UMassProcessor* Processor)
+		{
+			return Processor && Processor->GetClass() == InitializerClass;
+		}
+	);
+
+	if (Initializer == nullptr)
+	{
+		UMassProcessor* NewInitializer = NewObject<UMassProcessor>(this, InitializerClass);
+		NewInitializer->Initialize(*this);
+		SpawnDataInitializers.Add(NewInitializer);
+		return NewInitializer;
+	}
+
+	return *Initializer;
+}
+
 void UETW_MassSquadSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Collection.InitializeDependency<UMassSimulationSubsystem>();

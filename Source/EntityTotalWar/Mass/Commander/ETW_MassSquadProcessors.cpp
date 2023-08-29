@@ -85,7 +85,7 @@ namespace UE::Mass::Squad
 
 		if ((World->GetNetMode() == NM_DedicatedServer || World->GetNetMode() == NM_ListenServer) && UE::Mass::Squad::bDebugSquadUnits_Server)
 		{
-			DrawDebugString(World, Pos + DebugCylinderHeight, DbgString, nullptr, DebugColor, World->GetDeltaSeconds(), true);
+			DrawDebugString(World, Pos + DebugCylinderHeight, FString(TEXT("[Server]")) + DbgString, nullptr, DebugColor, World->GetDeltaSeconds(), true);
 		}
 	}
 
@@ -164,24 +164,13 @@ void UETW_MassSquadTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildCo
 	BuildContext.RequireFragment<FAgentRadiusFragment>();
 	BuildContext.AddFragment<FETW_MassUnitFragment>();  
 	BuildContext.AddFragment<FETW_MassTeamFragment>(); 
-
-	UETW_MassSquadSubsystem* SquadSubsystem = UWorld::GetSubsystem<UETW_MassSquadSubsystem>(&World);
-
-	if (SquadSubsystem == nullptr)
-	{
-		ensureMsgf(false, TEXT("UETW_MassSquadSubsystem subsystem not found in %s"), __FUNCTION__);
-		return;
-	}
-	FMassSquadManager& SquadManager = SquadSubsystem->GetMutablSquadManager();
-	
 	
 	FETW_MassSquadSharedFragment SquadSharedFragment;
 	SquadSharedFragment.Formation = Params.DefaultFormation;
-	SquadSharedFragment.SquadIndex = SquadManager.GetSquadId();
 	
 	uint32 SquadSharedFragmentHash = UE::StructUtils::GetStructCrc32(FConstStructView::Make(SquadSharedFragment));
 	FSharedStruct SquadSharedFragmentStruct = EntityManager.GetOrCreateSharedFragmentByHash<FETW_MassSquadSharedFragment>(SquadSharedFragmentHash, SquadSharedFragment);
-	BuildContext.AddSharedFragment(SquadSharedFragmentStruct);
+	BuildContext.AddSharedFragment(SquadSharedFragmentStruct);  // add there for correct archeotype composition descriptor, Change actual shared fragment value in custom entities spawning function
 	
 	const FConstSharedStruct ParamsFragment = EntityManager.GetOrCreateConstSharedFragment(Params);
 	BuildContext.AddConstSharedFragment(ParamsFragment);
@@ -237,7 +226,6 @@ void UETW_MassSquadProcessor::Execute(FMassEntityManager& EntityManager, FMassEx
 	check(SquadSubsystem);
 	FMassSquadManager& SquadManager = SquadSubsystem->GetMutablSquadManager();
 
-	
 	// for each shared fragment
 	{
 		QUICK_SCOPE_CYCLE_COUNTER(UMassSquadProcessor_ForEachSquadSharedFragment);
@@ -331,19 +319,25 @@ void UMassSquadPostSpawnProcessor::Execute(FMassEntityManager& EntityManager, FM
 		UE_VLOG_UELOG(this, LogMass, Log, TEXT("Execution context has invalid AuxData or it's not FMassSquadSpawnData. Entity transforms won't be initialized."));
 		return;
 	}
-
+	
 	EntityQuery_Unit.ForEachEntityChunk(EntityManager, Context, [](FMassExecutionContext& Context)
 	{
-		UETW_MassSquadSubsystem& SquadSubsystem = Context.GetMutableSubsystemChecked<UETW_MassSquadSubsystem>();
-		FMassSquadManager& SquadManager = SquadSubsystem.GetMutablSquadManager();
+		FMassEntityManager& EntityManager = Context.GetEntityManagerChecked();
 		const FMassSquadSpawnAuxData& AuxData = Context.GetAuxData().Get<FMassSquadSpawnAuxData>();
-		
+
+		UETW_MassSquadSubsystem* SquadSubsystem = Context.GetMutableSubsystem<UETW_MassSquadSubsystem>();
+		if (SquadSubsystem == nullptr)
+		{
+			ensureMsgf(false, TEXT("UETW_MassSquadSubsystem subsystem not found in %s"), __FUNCTION__);
+			return;
+		}
+		FMassSquadManager& SquadManager = SquadSubsystem->GetMutablSquadManager();
+
 		const FETW_MassSquadParams& SquadParams = Context.GetConstSharedFragment<FETW_MassSquadParams>();
 		FETW_MassSquadSharedFragment& SquadSharedFragment = Context.GetMutableSharedFragment<FETW_MassSquadSharedFragment>();
-
 		const TArrayView<FETW_MassTeamFragment> TeamFragments = Context.GetMutableFragmentView<FETW_MassTeamFragment>();
 		const TArrayView<FETW_MassUnitFragment> UnitFragments = Context.GetMutableFragmentView<FETW_MassUnitFragment>();
-
+		
 		// initialize unit entities
 		const int32 NumEntities = Context.GetNumEntities();
 		for (int32 EntityIdx = 0; EntityIdx < NumEntities; EntityIdx++)
@@ -351,11 +345,10 @@ void UMassSquadPostSpawnProcessor::Execute(FMassEntityManager& EntityManager, FM
 			TeamFragments[EntityIdx].TeamIndex = AuxData.TeamIndex;
 			UnitFragments[EntityIdx].UnitIndex = SquadManager.GetUnitId();
 		}
+		// --- end initialize unit entities
 
-
+		
 		// --- create squad entity for units  //
-		FMassEntityManager& EntityManager = Context.GetEntityManagerChecked();
-
 		// fragments
 		TArray<FInstancedStruct> FragmentInstanceList;
 		FragmentInstanceList.Reserve(4);
@@ -383,7 +376,6 @@ void UMassSquadPostSpawnProcessor::Execute(FMassEntityManager& EntityManager, FM
 		SharedFragments.Sort();
 		
 		EntityManager.CreateEntity(FragmentInstanceList, SharedFragments, FName(FString::Printf(TEXT("Squad_%d"), SquadSharedFragment.SquadIndex)));
-
 		// --- END create squad entity for units//
 	});
 	
