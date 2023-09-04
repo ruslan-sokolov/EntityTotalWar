@@ -7,7 +7,7 @@
 
 namespace UE::Mass::Squad
 {
-	constexpr int32 MaxAgentsDraw = 300;
+	int32 MaxAgentsDraw = 300;
 
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 
