@@ -1,6 +1,6 @@
 # Visual Studio user specific files
 .vs/
-
+.vsconfig
 # Compiled Object files
 *.slo
 *.lo
