@@ -7,7 +7,7 @@
 
 namespace UE::Mass::Squad
 {
-	int32 MaxAgentsDraw = 300;
+	static int32 MaxAgentsDraw = 300;
 
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 
@@ -69,7 +69,7 @@ void FETW_MassSquadUnitsClientBubbleHandler::DebugValidateBubbleOnServer()
 		const FMassEntityManager& EntityManager = Serializer->GetEntityManagerChecked();
 
 		// @todo cap at MaxAgentsDraw for now
-		const int32 MaxAgentsDraw = FMath::Min(UE::Mass::Squad::MaxAgentsDraw, (*Agents).Num());
+		static int32 MaxAgentsDraw = FMath::Min(UE::Mass::Squad::MaxAgentsDraw, (*Agents).Num());
 
 		for (int32 Idx = 0; Idx < MaxAgentsDraw; ++Idx)
 		{
@@ -100,7 +100,7 @@ void FETW_MassSquadUnitsClientBubbleHandler::DebugValidateBubbleOnClient()
 		check(ReplicationSubsystem);
 
 		// @todo cap at MaxAgentsDraw for now
-		const int32 MaxAgentsDraw = FMath::Min(UE::Mass::Squad::MaxAgentsDraw, (*Agents).Num());
+		static int32 MaxAgentsDraw = FMath::Min(UE::Mass::Squad::MaxAgentsDraw, (*Agents).Num());
 
 		for (int32 Idx = 0; Idx < MaxAgentsDraw; ++Idx)
 		{

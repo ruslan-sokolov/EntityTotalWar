@@ -27,7 +27,7 @@ namespace UE::Mass::Squad
 	FAutoConsoleVariableRef CVarbDebugSquads_Server(TEXT("etw.debug.Squads.Server"), bDebugSquads_Server, TEXT("Debug squads server"), ECVF_Cheat);
 
 	// @todo provide a better way of selecting agents to debug
-	constexpr int32 MaxAgentsDraw = 30;
+	static int32 MaxAgentsDraw = 30;
 
 	void DebugDrawSquadUnits(FMassEntityHandle Entity, const FMassEntityManager& EntityManager, const float Radius = 50.f)
 	{
