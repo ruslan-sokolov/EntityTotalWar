@@ -146,6 +146,7 @@ void FETW_MassSquadUnitsClientBubbleHandler::PostReplicatedAdd(const TArrayView<
 	PostReplicatedAddHelper(AddedIndices, AddRequirementsForSpawnQuery, CacheFragmentViewsForSpawnQuery, SetSpawnedEntityData, SetModifiedEntityData);
 
 	TransformHandler.ClearFragmentViewsForSpawnQuery();
+	SquadUnitsHandler.ClearFragmentViewsForSpawnQuery();
 }
 
 void FETW_MassSquadUnitsClientBubbleHandler::PostReplicatedChange(const TArrayView<int32> ChangedIndices, int32 FinalSize)
@@ -161,15 +162,16 @@ void FETW_MassSquadUnitsClientBubbleHandler::PostReplicatedChange(const TArrayVi
 void FETW_MassSquadUnitsClientBubbleHandler::PostReplicatedChangeEntity(const FMassEntityView& EntityView, const FETW_MassReplicatedSquadUnitsAgent& Item) const
 {
 	TransformHandler.SetModifiedEntityData(EntityView, Item.GetReplicatedPositionYawData());
+	SquadUnitsHandler.SetModifiedEntityData(EntityView, Item.GetReplicatedSquadUnitData());
 }
 
-AETW_MassSquadClientBubbleInfo::AETW_MassSquadClientBubbleInfo(const FObjectInitializer& ObjectInitializer)
+AETW_MassSquadUnitClientBubbleInfo::AETW_MassSquadUnitClientBubbleInfo(const FObjectInitializer& ObjectInitializer)
 	: AMassClientBubbleInfoBase(ObjectInitializer)
 {
 	Serializers.Add(&Serializer);
 }
 
-void AETW_MassSquadClientBubbleInfo::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+void AETW_MassSquadUnitClientBubbleInfo::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
@@ -177,12 +179,5 @@ void AETW_MassSquadClientBubbleInfo::GetLifetimeReplicatedProps(TArray<FLifetime
 	SharedParams.bIsPushBased = true;
 
 	// Technically, this doesn't need to be PushModel based because it's a FastArray and they ignore it.
-	DOREPLIFETIME_WITH_PARAMS_FAST(AETW_MassSquadClientBubbleInfo, Serializer, SharedParams);
-}
-
-void AETW_MassSquadClientBubbleInfo::OnRep_Serializer()
-{
-	// hack fix query when only one arhcheotype and no updating valid archetypes cos last archeotype version in manager is same
-	//FMassEntityManager& EntityManager = Serializer.GetEntityManagerChecked();
-	//EntityManager.DebugForceArchetypeDataVersionBump();
+	DOREPLIFETIME_WITH_PARAMS_FAST(AETW_MassSquadUnitClientBubbleInfo, Serializer, SharedParams);
 }

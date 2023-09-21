@@ -90,6 +90,21 @@ struct FETW_MassFormation
 	
 	UPROPERTY(EditAnywhere)
 	EETW_FormationMovementMode FormationMovementMode = EETW_FormationMovementMode::March;
+
+	bool operator==(const FETW_MassFormation& Other) const
+	{
+		return Length == Other.Length &&
+			DencityInterval == Other.DencityInterval &&
+			Speed == Other.Speed &&
+			FormationType == Other.FormationType &&
+			FormationDensity == Other.FormationDensity &&
+			FormationMovementMode == Other.FormationMovementMode;
+	}
+
+	bool operator!=(const FETW_MassFormation& Other) const
+	{
+		return !(*this == Other);
+	}
 	
 };
 

@@ -22,5 +22,4 @@ void UETW_MassSubsystem::PostInitialize()
 
 	check(ReplicationSubsystem);
 	ReplicationSubsystem->RegisterBubbleInfoClass(AETW_MassClientBubbleInfo::StaticClass());
-	ReplicationSubsystem->RegisterBubbleInfoClass(AETW_MassSquadClientBubbleInfo::StaticClass());
 }

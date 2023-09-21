@@ -2,7 +2,12 @@
 
 
 #include "ETW_MassSquadSubsystem.h"
+
+#include "ETW_MassSubsystem.h"
+#include "MassReplicationSubsystem.h"
 #include "MassSimulationSubsystem.h"
+#include "Replication/Squad/ETW_MassSquadBubble.h"
+#include "Replication/SquadUnits/ETW_MassSquadUnitsBubble.h"
 
 FMassSquadManager::FMassSquadManager(UObject* InOwner)
 	: Owner(InOwner)
@@ -62,6 +67,9 @@ UMassProcessor* UETW_MassSquadSubsystem::GetSpawnDataInitializer(TSubclassOf<UMa
 void UETW_MassSquadSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Collection.InitializeDependency<UMassSimulationSubsystem>();
+	Collection.InitializeDependency<UMassReplicationSubsystem>();
+	Collection.InitializeDependency<UETW_MassSubsystem>();
+
 	SquadManager->Initialize();
 
 	ensure(SquadPostSpawnProcessor);
@@ -70,6 +78,11 @@ void UETW_MassSquadSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UETW_MassSquadSubsystem::PostInitialize()
 {
+	UMassReplicationSubsystem* ReplicationSubsystem = UWorld::GetSubsystem<UMassReplicationSubsystem>(GetWorld());
+
+	check(ReplicationSubsystem);
+	ReplicationSubsystem->RegisterBubbleInfoClass(AETW_MassSquadUnitClientBubbleInfo::StaticClass());
+	ReplicationSubsystem->RegisterBubbleInfoClass(AETW_MassSquadClientBubbleInfo::StaticClass());
 }
 
 void UETW_MassSquadSubsystem::Deinitialize()

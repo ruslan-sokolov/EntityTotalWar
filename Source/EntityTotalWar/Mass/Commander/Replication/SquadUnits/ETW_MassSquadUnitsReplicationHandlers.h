@@ -24,14 +24,11 @@ struct ENTITYTOTALWAR_API FETW_ReplicatedSquadUnitAgentData
 {
 	GENERATED_BODY()
 
-	//friend class FETW_MassClientBubbleSquadUnitHandlerBase;
-
 	FETW_ReplicatedSquadUnitAgentData() = default;
 	explicit FETW_ReplicatedSquadUnitAgentData(
 		const FETW_MassUnitFragment& UnitFragment,
 		const FETW_MassTeamFragment& TeamFragment,
 		const FMassTargetLocationFragment& TargetLocationFragment
-		//,const FETW_MassSquadSharedFragment& SquadSharedFragment
 		);
 
 	void InitEntity(const UWorld& InWorld,
@@ -47,25 +44,20 @@ struct ENTITYTOTALWAR_API FETW_ReplicatedSquadUnitAgentData
 	
 	UPROPERTY(Transient)
 	uint32 UnitIndex = 0;
-
-	//UPROPERTY(Transient)
-	//uint32 SquadIndex = 0;
 	
 	UPROPERTY(Transient)
 	int8 TeamIndex = 0;
 };
 
-//////////////////////////////////////////////////////////////////////////// TETW_MassClientBubbleSquadUnitHandler ////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////// FETW_MassClientBubbleSquadUnitHandler ////////////////////////////////////////////////////////////////////////////
 /**
  * To replicate squad unit make a member variable of this class in your TClientBubbleHandlerBase derived class. This class is a friend of TTETW_MassClientBubbleSquadUnitHandler.
  * It is meant to have access to the protected data declared there.
  */
-//template<typename AgentArrayItem>
-class TETW_MassClientBubbleSquadUnitHandler
+class FETW_MassClientBubbleSquadUnitHandler
 {
 public:
-	//TETW_MassClientBubbleSquadUnitHandler(TClientBubbleHandlerBase<AgentArrayItem>& InOwnerHandler)
-	TETW_MassClientBubbleSquadUnitHandler(FETW_MassSquadUnitsClientBubbleHandler& InOwnerHandler)
+	FETW_MassClientBubbleSquadUnitHandler(FETW_MassSquadUnitsClientBubbleHandler& InOwnerHandler)
 		: OwnerHandler(InOwnerHandler)
 	{}
 
@@ -103,7 +95,6 @@ protected:
 //////////////////////////////////////////////////////////////////////////// FMassReplicationProcessorSquadUnitHandler ////////////////////////////////////////////////////////////////////////////
 /**
  * Used to replicate squad unit by your UMassReplicationProcessorBase derived class. This class should only get used on the server.
- * @todo add #if UE_REPLICATION_COMPILE_SERVER_CODE
  */
 class ENTITYTOTALWAR_API FMassReplicationProcessorSquadUnitHandler
 {
@@ -129,8 +120,8 @@ public:
 	 * @param bLastClient means it safe to reset any dirtiness
 	 */
 	//template<typename AgentArrayItem>
-	//void ModifyEntity(const FMassReplicatedAgentHandle Handle, const int32 EntityIdx, TETW_MassClientBubbleSquadUnitHandler<AgentArrayItem>& BubbleSquadUnitHandler, bool bLastClient);
-	void ModifyEntity(const FMassReplicatedAgentHandle Handle, const int32 EntityIdx, TETW_MassClientBubbleSquadUnitHandler& BubbleSquadUnitHandler, bool bLastClient);
+	//void ModifyEntity(const FMassReplicatedAgentHandle Handle, const int32 EntityIdx, FETW_MassClientBubbleSquadUnitHandler<AgentArrayItem>& BubbleSquadUnitHandler, bool bLastClient);
+	void ModifyEntity(const FMassReplicatedAgentHandle Handle, const int32 EntityIdx, FETW_MassClientBubbleSquadUnitHandler& BubbleSquadUnitHandler, bool bLastClient);
 
 	TArrayView<FETW_MassUnitFragment> UnitFragmentList;
 	TArrayView<FETW_MassTeamFragment> TeamFragmentList;

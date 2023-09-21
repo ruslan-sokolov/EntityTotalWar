@@ -30,7 +30,7 @@ void UETW_MassSquadUnitsReplicator::ProcessClientReplication(FMassExecutionConte
 
 	auto AddEntityCallback = [&RepSharedFrag, &PositionYawHandler, &SquadUnitHandler](FMassExecutionContext& Context, const int32 EntityIdx, FETW_MassReplicatedSquadUnitsAgent& InReplicatedAgent, const FMassClientHandle ClientHandle)->FMassReplicatedAgentHandle
 	{
-		AETW_MassSquadClientBubbleInfo& BubbleInfo = RepSharedFrag->GetTypedClientBubbleInfoChecked<AETW_MassSquadClientBubbleInfo>(ClientHandle);
+		AETW_MassSquadUnitClientBubbleInfo& BubbleInfo = RepSharedFrag->GetTypedClientBubbleInfoChecked<AETW_MassSquadUnitClientBubbleInfo>(ClientHandle);
 
 		PositionYawHandler.AddEntity(EntityIdx, InReplicatedAgent.GetReplicatedPositionYawDataMutable());
 		SquadUnitHandler.AddEntity(EntityIdx, InReplicatedAgent.GetReplicatedSquadUnitDataMutable());
@@ -40,7 +40,7 @@ void UETW_MassSquadUnitsReplicator::ProcessClientReplication(FMassExecutionConte
 
 	auto ModifyEntityCallback = [&RepSharedFrag, &PositionYawHandler, &SquadUnitHandler](FMassExecutionContext& Context, const int32 EntityIdx, const EMassLOD::Type LOD, const float Time, const FMassReplicatedAgentHandle Handle, const FMassClientHandle ClientHandle)
 	{
-		AETW_MassSquadClientBubbleInfo& BubbleInfo = RepSharedFrag->GetTypedClientBubbleInfoChecked<AETW_MassSquadClientBubbleInfo>(ClientHandle);
+		AETW_MassSquadUnitClientBubbleInfo& BubbleInfo = RepSharedFrag->GetTypedClientBubbleInfoChecked<AETW_MassSquadUnitClientBubbleInfo>(ClientHandle);
 
 		FETW_MassSquadUnitsClientBubbleHandler& Bubble = BubbleInfo.GetSerializer().Bubble;
 
@@ -52,15 +52,13 @@ void UETW_MassSquadUnitsReplicator::ProcessClientReplication(FMassExecutionConte
 
 	auto RemoveEntityCallback = [&RepSharedFrag](FMassExecutionContext& Context, const FMassReplicatedAgentHandle Handle, const FMassClientHandle ClientHandle)
 	{
-		AETW_MassSquadClientBubbleInfo& BubbleInfo = RepSharedFrag->GetTypedClientBubbleInfoChecked<AETW_MassSquadClientBubbleInfo>(ClientHandle);
+		AETW_MassSquadUnitClientBubbleInfo& BubbleInfo = RepSharedFrag->GetTypedClientBubbleInfoChecked<AETW_MassSquadUnitClientBubbleInfo>(ClientHandle);
 
 		BubbleInfo.GetSerializer().Bubble.RemoveAgentChecked(Handle);
 	};
 
 	CalculateClientReplication<FETW_MassSquadUnitsFastArrayItem>(Context, ReplicationContext, CacheViewsCallback, AddEntityCallback, ModifyEntityCallback, RemoveEntityCallback);
 
-	// hack fix query when only one arhcheotype and no updating valid archetypes cos last archeotype version in manager is same
-	//Context.GetEntityManagerChecked().DebugForceArchetypeDataVersionBump();
 #endif // UE_REPLICATION_COMPILE_SERVER_CODE
 }
 
@@ -68,6 +66,6 @@ void UETW_MassSquadUnitsReplicator::ProcessClientReplication(FMassExecutionConte
 
 UETW_MassSquadUnitsReplicationTrait::UETW_MassSquadUnitsReplicationTrait()
 {
-	Params.BubbleInfoClass = AETW_MassSquadClientBubbleInfo::StaticClass();
+	Params.BubbleInfoClass = AETW_MassSquadUnitClientBubbleInfo::StaticClass();
 	Params.ReplicatorClass = UETW_MassSquadUnitsReplicator::StaticClass();
 }

@@ -21,11 +21,11 @@ class ENTITYTOTALWAR_API FETW_MassSquadUnitsClientBubbleHandler : public TClient
 {
 public:
 	//template<typename T>
-	//friend class TETW_MassClientBubbleSquadUnitHandler<FETW_MassSquadUnitsFastArrayItem>;
+	//friend class FETW_MassClientBubbleSquadUnitHandler<FETW_MassSquadUnitsFastArrayItem>;
 	
 	typedef TClientBubbleHandlerBase<FETW_MassSquadUnitsFastArrayItem> Super;
 	typedef TMassClientBubbleTransformHandler<FETW_MassSquadUnitsFastArrayItem> FMassClientBubbleTransformHandler;
-	//typedef TETW_MassClientBubbleSquadUnitHandler<FETW_MassSquadUnitsFastArrayItem> FETW_MassClientBubbleSquadUnitHandler;
+	//typedef FETW_MassClientBubbleSquadUnitHandler<FETW_MassSquadUnitsFastArrayItem> FETW_MassClientBubbleSquadUnitHandler;
 
 	FETW_MassSquadUnitsClientBubbleHandler()
 		: TransformHandler(*this),
@@ -37,8 +37,8 @@ public:
 	const FMassClientBubbleTransformHandler& GetTransformHandler() const { return TransformHandler; }
 	FMassClientBubbleTransformHandler& GetTransformHandlerMutable() { return TransformHandler; }
 
-	const TETW_MassClientBubbleSquadUnitHandler& GetSquadUnitsHandler() const { return SquadUnitsHandler; }
-	TETW_MassClientBubbleSquadUnitHandler& GetSquadUnitsHandlerMutable() { return SquadUnitsHandler; }
+	const FETW_MassClientBubbleSquadUnitHandler& GetSquadUnitsHandler() const { return SquadUnitsHandler; }
+	FETW_MassClientBubbleSquadUnitHandler& GetSquadUnitsHandlerMutable() { return SquadUnitsHandler; }
 
 	// protected inherited member accessor
 	FMassReplicatedAgentHandleManager& GetAgentHandleManager() { return AgentHandleManager; }
@@ -66,7 +66,7 @@ protected:
 #endif // WITH_MASSGAMEPLAY_DEBUG
 
 	FMassClientBubbleTransformHandler TransformHandler;
-	TETW_MassClientBubbleSquadUnitHandler SquadUnitsHandler;
+	FETW_MassClientBubbleSquadUnitHandler SquadUnitsHandler;
 };
 
 USTRUCT()
@@ -108,23 +108,20 @@ struct TStructOpsTypeTraits<FETW_MassSquadUnitsClientBubbleSerializer> : public 
  * 
  */
 UCLASS()
-class ENTITYTOTALWAR_API AETW_MassSquadClientBubbleInfo : public AMassClientBubbleInfoBase
+class ENTITYTOTALWAR_API AETW_MassSquadUnitClientBubbleInfo : public AMassClientBubbleInfoBase
 {
 	GENERATED_BODY()
 	
 public:
-	AETW_MassSquadClientBubbleInfo(const FObjectInitializer& ObjectInitializer);
+	AETW_MassSquadUnitClientBubbleInfo(const FObjectInitializer& ObjectInitializer);
 
 	FETW_MassSquadUnitsClientBubbleSerializer& GetSerializer() { return Serializer; }
 
-	UFUNCTION()
-	void OnRep_Serializer();
 protected:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	UPROPERTY(ReplicatedUsing = OnRep_Serializer, Transient)
+	UPROPERTY(Replicated, Transient)
 	FETW_MassSquadUnitsClientBubbleSerializer Serializer;
-
 
 };

@@ -9,11 +9,9 @@
 FETW_ReplicatedSquadUnitAgentData::FETW_ReplicatedSquadUnitAgentData(const FETW_MassUnitFragment& UnitFragment,
                                                                      const FETW_MassTeamFragment& TeamFragment,
                                                                      const FMassTargetLocationFragment& TargetLocationFragment
-                                                                     //,const FETW_MassSquadSharedFragment& SquadSharedFragment
                                                                      )
 		: TargetLocation(TargetLocationFragment.Target),
 		UnitIndex(UnitFragment.UnitIndex),
-		//SquadIndex(SquadSharedFragment.SquadIndex),
 		TeamIndex(TeamFragment.TeamIndex)
 {
 }
@@ -22,26 +20,10 @@ void FETW_ReplicatedSquadUnitAgentData::InitEntity(const UWorld& InWorld, const 
 	FETW_MassUnitFragment& OutUnitFragment, FETW_MassTeamFragment& OutTeamFragment,
 	FMassTargetLocationFragment& OutTargetLocationFragment) const
 {
-	const FMassEntityHandle Entity = InEntityView.GetEntity();
-
-	//const UETW_MassSquadSubsystem* SquadSubsystem = InWorld.GetSubsystem<UETW_MassSquadSubsystem>();
-	//const UMassSimulationSubsystem* SimulationSubsystem = InWorld.GetSubsystem<UMassSimulationSubsystem>();
-	//if (SquadSubsystem == nullptr || SimulationSubsystem == nullptr)
-	//{
-	//	UE_VLOG_UELOG(&InWorld, ETW_Mass, Error, TEXT("Entity [%s] no UETW_MassSquadSubsystem to init Entity"),
-	//		*Entity.DebugGetDescription());
-	//	UE_VLOG_UELOG(&InWorld, ETW_Mass, Error, TEXT("Entity [%s] no UMassSimulationSubsystem to process request"),
-	//		*Entity.DebugGetDescription());
-	//	return;
-	//}
-
 	// setup fragments
 	OutUnitFragment.UnitIndex = UnitIndex;
 	OutTeamFragment.TeamIndex = TeamIndex;
 	OutTargetLocationFragment.Target = TargetLocation;
-
-	// setup shared fragments
-	// todo: figure out how
 
 	ApplyToEntity(InWorld, InEntityView);
 }
@@ -62,9 +44,7 @@ void FETW_ReplicatedSquadUnitAgentData::ApplyToEntity(const UWorld& InWorld, con
 
 
 #if UE_REPLICATION_COMPILE_SERVER_CODE
-//template<typename AgentArrayItem>
-//void TETW_MassClientBubbleSquadUnitHandler<AgentArrayItem>::SetBubbleSquadUnitData(const FMassReplicatedAgentHandle Handle,
-void TETW_MassClientBubbleSquadUnitHandler::SetBubbleSquadUnitData(const FMassReplicatedAgentHandle Handle,
+void FETW_MassClientBubbleSquadUnitHandler::SetBubbleSquadUnitData(const FMassReplicatedAgentHandle Handle,
 	const FETW_MassUnitFragment& UnitFragment,
 	const FETW_MassTeamFragment& TeamFragment,
 	const FMassTargetLocationFragment& TargetLocationFragment)
@@ -107,9 +87,7 @@ void TETW_MassClientBubbleSquadUnitHandler::SetBubbleSquadUnitData(const FMassRe
 #endif //UE_REPLICATION_COMPILE_SERVER_CODE
 
 #if UE_REPLICATION_COMPILE_CLIENT_CODE
-//template<typename AgentArrayItem>
-//void TETW_MassClientBubbleSquadUnitHandler<AgentArrayItem>::AddRequirementsForSpawnQuery(FMassEntityQuery& InQuery)
-void TETW_MassClientBubbleSquadUnitHandler::AddRequirementsForSpawnQuery(FMassEntityQuery& InQuery)
+void FETW_MassClientBubbleSquadUnitHandler::AddRequirementsForSpawnQuery(FMassEntityQuery& InQuery)
 {
 	InQuery.AddRequirement<FETW_MassUnitFragment>(EMassFragmentAccess::ReadWrite);
 	InQuery.AddRequirement<FETW_MassTeamFragment>(EMassFragmentAccess::ReadWrite);
@@ -118,9 +96,7 @@ void TETW_MassClientBubbleSquadUnitHandler::AddRequirementsForSpawnQuery(FMassEn
 #endif // UE_REPLICATION_COMPILE_CLIENT_CODE
 
 #if UE_REPLICATION_COMPILE_CLIENT_CODE
-//template<typename AgentArrayItem>
-//void TETW_MassClientBubbleSquadUnitHandler<AgentArrayItem>::CacheFragmentViewsForSpawnQuery(FMassExecutionContext& InExecContext)
-void TETW_MassClientBubbleSquadUnitHandler::CacheFragmentViewsForSpawnQuery(FMassExecutionContext& InExecContext)
+void FETW_MassClientBubbleSquadUnitHandler::CacheFragmentViewsForSpawnQuery(FMassExecutionContext& InExecContext)
 {
 	UnitFragmentList = InExecContext.GetMutableFragmentView<FETW_MassUnitFragment>();
 	TeamFragmentList = InExecContext.GetMutableFragmentView<FETW_MassTeamFragment>();
@@ -129,9 +105,7 @@ void TETW_MassClientBubbleSquadUnitHandler::CacheFragmentViewsForSpawnQuery(FMas
 #endif // UE_REPLICATION_COMPILE_CLIENT_CODE
 
 #if UE_REPLICATION_COMPILE_CLIENT_CODE
-//template<typename AgentArrayItem>
-//void TETW_MassClientBubbleSquadUnitHandler<AgentArrayItem>::ClearFragmentViewsForSpawnQuery()
-void TETW_MassClientBubbleSquadUnitHandler::ClearFragmentViewsForSpawnQuery()
+void FETW_MassClientBubbleSquadUnitHandler::ClearFragmentViewsForSpawnQuery()
 {
 	UnitFragmentList = TArrayView<FETW_MassUnitFragment>();
 	TeamFragmentList = TArrayView<FETW_MassTeamFragment>();
@@ -140,9 +114,7 @@ void TETW_MassClientBubbleSquadUnitHandler::ClearFragmentViewsForSpawnQuery()
 #endif // UE_REPLICATION_COMPILE_CLIENT_CODE
 
 #if UE_REPLICATION_COMPILE_CLIENT_CODE
-//template<typename AgentArrayItem>
-//void TETW_MassClientBubbleSquadUnitHandler<AgentArrayItem>::SetSpawnedEntityData(const FMassEntityView& EntityView, const FETW_ReplicatedSquadUnitAgentData& ReplicatedUnitAgentData, const int32 EntityIdx) const
-void TETW_MassClientBubbleSquadUnitHandler::SetSpawnedEntityData(const FMassEntityView& EntityView, const FETW_ReplicatedSquadUnitAgentData& ReplicatedUnitAgentData, const int32 EntityIdx) const
+void FETW_MassClientBubbleSquadUnitHandler::SetSpawnedEntityData(const FMassEntityView& EntityView, const FETW_ReplicatedSquadUnitAgentData& ReplicatedUnitAgentData, const int32 EntityIdx) const
 {
 	UWorld* World = OwnerHandler.GetSerializer()->GetWorld();
 	check(World);
@@ -152,9 +124,7 @@ void TETW_MassClientBubbleSquadUnitHandler::SetSpawnedEntityData(const FMassEnti
 #endif // UE_REPLICATION_COMPILE_CLIENT_CODE
 
 #if UE_REPLICATION_COMPILE_CLIENT_CODE
-//template<typename AgentArrayItem>
-//void TETW_MassClientBubbleSquadUnitHandler::SetModifiedEntityData(const FMassEntityView& EntityView, const FETW_ReplicatedSquadUnitAgentData& ReplicatedUnitAgentData) const
-void TETW_MassClientBubbleSquadUnitHandler::SetModifiedEntityData(const FMassEntityView& EntityView, const FETW_ReplicatedSquadUnitAgentData& ReplicatedUnitAgentData) const
+void FETW_MassClientBubbleSquadUnitHandler::SetModifiedEntityData(const FMassEntityView& EntityView, const FETW_ReplicatedSquadUnitAgentData& ReplicatedUnitAgentData) const
 {
 	UWorld* World = OwnerHandler.GetSerializer()->GetWorld();
 	check(World);
@@ -187,9 +157,7 @@ void FMassReplicationProcessorSquadUnitHandler::AddEntity(const int32 EntityIdx,
 	InOutReplicatedSquadUnitData = FETW_ReplicatedSquadUnitAgentData(UnitFragment, TeamFragment, TargetLocationFragment);
 }
 
-//template<typename AgentArrayItem>
-//void FMassReplicationProcessorSquadUnitHandler::ModifyEntity(const FMassReplicatedAgentHandle Handle, const int32 EntityIdx, TETW_MassClientBubbleSquadUnitHandler<AgentArrayItem>& BubbleSquadUnitHandler, bool bLastClient)
-void FMassReplicationProcessorSquadUnitHandler::ModifyEntity(const FMassReplicatedAgentHandle Handle, const int32 EntityIdx, TETW_MassClientBubbleSquadUnitHandler& BubbleSquadUnitHandler, bool bLastClient)
+void FMassReplicationProcessorSquadUnitHandler::ModifyEntity(const FMassReplicatedAgentHandle Handle, const int32 EntityIdx, FETW_MassClientBubbleSquadUnitHandler& BubbleSquadUnitHandler, bool bLastClient)
 {
 	const FETW_MassUnitFragment& UnitFragment = UnitFragmentList[EntityIdx];
 	const FETW_MassTeamFragment& TeamFragment= TeamFragmentList[EntityIdx];
