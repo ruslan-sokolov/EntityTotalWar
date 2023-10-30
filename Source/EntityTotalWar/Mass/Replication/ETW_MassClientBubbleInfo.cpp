@@ -4,7 +4,7 @@
 #include "Mass/Replication/ETW_MassClientBubbleInfo.h"
 #include "Net/UnrealNetwork.h"
 
-namespace UE::Mass::Crowd
+namespace UE::Mass::Squad
 {
 	bool bDebugReplicationPositions = false;
 	FAutoConsoleVariableRef CVarbDebugReplication(TEXT("etw.debug.ReplicationPositions"), bDebugReplicationPositions, TEXT("Crowd debug replication positions on server and client"), ECVF_Cheat);
@@ -58,7 +58,6 @@ namespace UE::Mass::Crowd
 #endif // WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 }
 
-
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 void FETW_MassClientBubbleHandler::DebugValidateBubbleOnServer()
 {
@@ -66,12 +65,12 @@ void FETW_MassClientBubbleHandler::DebugValidateBubbleOnServer()
 
 
 #if UE_REPLICATION_COMPILE_SERVER_CODE
-	if (UE::Mass::Crowd::bDebugReplicationPositions)
+	if (UE::Mass::Squad::bDebugReplicationPositions)
 	{
 		const FMassEntityManager& EntityManager = Serializer->GetEntityManagerChecked();
 
 		// @todo cap at MaxAgentsDraw for now
-		const int32 MaxAgentsDraw = FMath::Min(UE::Mass::Crowd::MaxAgentsDraw, (*Agents).Num());
+		const int32 MaxAgentsDraw = FMath::Min(UE::Mass::Squad::MaxAgentsDraw, (*Agents).Num());
 
 		for (int32 Idx = 0; Idx < MaxAgentsDraw; ++Idx)
 		{
@@ -81,7 +80,7 @@ void FETW_MassClientBubbleHandler::DebugValidateBubbleOnServer()
 
 			check(LookupData.Entity.IsSet());
 
-			UE::Mass::Crowd::DebugDrawReplicatedAgent(LookupData.Entity, EntityManager);
+			UE::Mass::Squad::DebugDrawReplicatedAgent(LookupData.Entity, EntityManager);
 		}
 	}
 #endif // UE_REPLICATION_COMPILE_SERVER_CODE
@@ -94,7 +93,7 @@ void FETW_MassClientBubbleHandler::DebugValidateBubbleOnClient()
 {
 	Super::DebugValidateBubbleOnClient();
 
-	if (UE::Mass::Crowd::bDebugReplicationPositions)
+	if (UE::Mass::Squad::bDebugReplicationPositions)
 	{
 		const FMassEntityManager& EntityManager = Serializer->GetEntityManagerChecked();
 
@@ -102,7 +101,7 @@ void FETW_MassClientBubbleHandler::DebugValidateBubbleOnClient()
 		check(ReplicationSubsystem);
 
 		// @todo cap at MaxAgentsDraw for now
-		const int32 MaxAgentsDraw = FMath::Min(UE::Mass::Crowd::MaxAgentsDraw, (*Agents).Num());
+		const int32 MaxAgentsDraw = FMath::Min(UE::Mass::Squad::MaxAgentsDraw, (*Agents).Num());
 
 		for (int32 Idx = 0; Idx < MaxAgentsDraw; ++Idx)
 		{
@@ -112,7 +111,7 @@ void FETW_MassClientBubbleHandler::DebugValidateBubbleOnClient()
 
 			check(EntityInfo->Entity.IsSet());
 
-			UE::Mass::Crowd::DebugDrawReplicatedAgent(EntityInfo->Entity, EntityManager, 35.f);
+			UE::Mass::Squad::DebugDrawReplicatedAgent(EntityInfo->Entity, EntityManager, 35.f);
 		}
 	}
 }

@@ -8,10 +8,11 @@
 namespace UE::Mass::Squad
 {
 	static int32 MaxAgentsDraw = 300;
+	extern bool bDebugReplicationPositions;
 
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 
-	void DebugDrawReplicatedAgent(FMassEntityHandle Entity, const FMassEntityManager& EntityManager, const float Radius = 50.f)
+	static void DebugDrawReplicatedAgent(FMassEntityHandle Entity, const FMassEntityManager& EntityManager, const float Radius = 50.f)
 	{
 		static const FVector DebugCylinderHeight = FVector(0.f, 0.f, 200.f);
 
@@ -56,7 +57,6 @@ namespace UE::Mass::Squad
 #endif // WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 }
 
-
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 void FETW_MassSquadUnitsClientBubbleHandler::DebugValidateBubbleOnServer()
 {
@@ -64,7 +64,7 @@ void FETW_MassSquadUnitsClientBubbleHandler::DebugValidateBubbleOnServer()
 
 
 #if UE_REPLICATION_COMPILE_SERVER_CODE
-	if (UE::Mass::Crowd::bDebugReplicationPositions)
+	if (UE::Mass::Squad::bDebugReplicationPositions)
 	{
 		const FMassEntityManager& EntityManager = Serializer->GetEntityManagerChecked();
 
@@ -92,7 +92,7 @@ void FETW_MassSquadUnitsClientBubbleHandler::DebugValidateBubbleOnClient()
 {
 	Super::DebugValidateBubbleOnClient();
 
-	if (UE::Mass::Crowd::bDebugReplicationPositions)
+	if (UE::Mass::Squad::bDebugReplicationPositions)
 	{
 		const FMassEntityManager& EntityManager = Serializer->GetEntityManagerChecked();
 

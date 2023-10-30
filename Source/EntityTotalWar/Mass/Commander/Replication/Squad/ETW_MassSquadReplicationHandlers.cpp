@@ -10,12 +10,13 @@
 FETW_ReplicatedSquadAgentData::FETW_ReplicatedSquadAgentData(
 	const FETW_MassSquadCommanderFragment& SquadCommanderFragment, const FETW_MassTeamFragment& TeamFragment,
 	const FMassTargetLocationFragment& TargetLocationFragment, const FETW_MassSquadSharedFragment& SquadSharedFragment)
-		: CommanderComp(SquadCommanderFragment.CommanderComp),
-		TeamIndex(TeamFragment.TeamIndex),
+		: Formation(SquadSharedFragment.Formation),
 		TargetLocation(TargetLocationFragment.Target),
+		CommanderComp(SquadCommanderFragment.CommanderComp),
 		SquadIndex(SquadSharedFragment.SquadIndex),
 		TargetSquadIndex(SquadSharedFragment.TargetSquadIndex),
-		Formation(SquadSharedFragment.Formation)
+		TeamIndex(TeamFragment.TeamIndex)
+
 {
 }
 

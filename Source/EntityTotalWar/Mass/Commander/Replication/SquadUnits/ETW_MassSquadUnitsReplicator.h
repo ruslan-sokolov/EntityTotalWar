@@ -3,18 +3,10 @@
 #pragma once
 
 #include "MassReplicationProcessor.h"
-#include "MassReplicationTrait.h"
 
 #include "ETW_MassSquadUnitsReplicator.generated.h"
 
-UCLASS(meta = (DisplayName = "ETW Squad Replication"))
-class ENTITYTOTALWAR_API UETW_MassSquadUnitsReplicationTrait : public UMassReplicationTrait
-{
-	GENERATED_BODY()
 
-public:
-	UETW_MassSquadUnitsReplicationTrait();
-};
 
 /**
  * 

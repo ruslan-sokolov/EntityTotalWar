@@ -11,6 +11,7 @@
 namespace UE::Mass::Squad
 {
 	static int32 MaxAgentsDraw = 300;
+	extern bool bDebugReplicationPositions;
 
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 
@@ -67,7 +68,7 @@ void FETW_MassSquadsClientBubbleHandler::DebugValidateBubbleOnServer()
 
 
 #if UE_REPLICATION_COMPILE_SERVER_CODE
-	if (UE::Mass::Crowd::bDebugReplicationPositions)
+	if (UE::Mass::Squad::bDebugReplicationPositions)
 	{
 		const FMassEntityManager& EntityManager = Serializer->GetEntityManagerChecked();
 
@@ -90,12 +91,13 @@ void FETW_MassSquadsClientBubbleHandler::DebugValidateBubbleOnServer()
 #endif // WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 
 
+
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 void FETW_MassSquadsClientBubbleHandler::DebugValidateBubbleOnClient()
 {
 	Super::DebugValidateBubbleOnClient();
 
-	if (UE::Mass::Crowd::bDebugReplicationPositions)
+	if (UE::Mass::Squad::bDebugReplicationPositions)
 	{
 		const FMassEntityManager& EntityManager = Serializer->GetEntityManagerChecked();
 

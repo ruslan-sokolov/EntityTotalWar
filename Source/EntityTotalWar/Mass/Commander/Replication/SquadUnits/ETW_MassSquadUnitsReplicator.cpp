@@ -64,8 +64,3 @@ void UETW_MassSquadUnitsReplicator::ProcessClientReplication(FMassExecutionConte
 
 
 
-UETW_MassSquadUnitsReplicationTrait::UETW_MassSquadUnitsReplicationTrait()
-{
-	Params.BubbleInfoClass = AETW_MassSquadUnitClientBubbleInfo::StaticClass();
-	Params.ReplicatorClass = UETW_MassSquadUnitsReplicator::StaticClass();
-}

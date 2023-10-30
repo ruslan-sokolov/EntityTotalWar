@@ -76,12 +76,16 @@ public:
 	FMassSquadManager& GetMutablSquadManager() const { check(SquadManager); return *SquadManager.Get(); }
 	const FMassSquadManager& GetSquadManager() { check(SquadManager); return *SquadManager.Get(); }
 
-	UMassSquadPostSpawnProcessor* GetSquadPostSpawnProcessor() { return SquadPostSpawnProcessor; }
+	UMassSquadUnitsPostSpawnProcessor* GetSquadUnitsPostSpawnProcessor() const { return SquadUnitsPostSpawnProcessor; }
+	UMassSquadPostSpawnProcessor* GetSquadPostSpawnProcessor() const { return SquadPostSpawnProcessor; }
 
 	UMassProcessor* GetSpawnDataInitializer(TSubclassOf<UMassProcessor> InitializerClass);
 	
 protected:
     TSharedPtr<FMassSquadManager> SquadManager;
+
+	UPROPERTY()
+	TObjectPtr<UMassSquadUnitsPostSpawnProcessor> SquadUnitsPostSpawnProcessor;
 
 	UPROPERTY()
 	TObjectPtr<UMassSquadPostSpawnProcessor> SquadPostSpawnProcessor;

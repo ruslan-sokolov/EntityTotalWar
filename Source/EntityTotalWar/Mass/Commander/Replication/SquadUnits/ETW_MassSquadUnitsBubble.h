@@ -10,10 +10,6 @@
 
 #include "ETW_MassSquadUnitsBubble.generated.h"
 
-namespace UE::Mass::Crowd
-{
-	extern bool bDebugReplicationPositions;
-}
 
 class FETW_MassSquadUnitsClientBubbleHandler;
 

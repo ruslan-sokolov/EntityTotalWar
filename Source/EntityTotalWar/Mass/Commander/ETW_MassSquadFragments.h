@@ -3,11 +3,12 @@
 #pragma once
 
 #include "ETW_MassTypes.h"
+#include "MassEntityConfigAsset.h"
 #include "ETW_MassSquadFragments.generated.h"
 
 
 USTRUCT()
-struct FMassSquadSpawnAuxData
+struct FMassSquadUnitsSpawnAuxData
 {
 	GENERATED_BODY()
 
@@ -139,18 +140,20 @@ USTRUCT(BlueprintType)
 struct ENTITYTOTALWAR_API FETW_MassSquadParams : public FMassSharedFragment
 {
 	GENERATED_BODY()
+	
+	TSoftObjectPtr<UMassEntityConfigAsset> SquadEntityTemplate = nullptr;
 
 	UPROPERTY(EditAnywhere)
 	FETW_MassFormation DefaultFormation;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (Bitmask, BitmaskEnum = EETW_FormationType))	
-	int32 AvaliableFormations;
+	int32 AvaliableFormations = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (Bitmask, BitmaskEnum = EETW_FormationDensity))
-	int32 AvaliableDensity;
+	int32 AvaliableDensity = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (Bitmask, BitmaskEnum = EETW_FormationMovementMode))
-	int32 AvaliableMoveMode;
+	int32 AvaliableMoveMode = 0;
 	
 	UPROPERTY(EditAnywhere, meta=(Units="Centimeters"))
 	float LooseDensity = 300.f;
@@ -172,4 +175,5 @@ struct ENTITYTOTALWAR_API FETW_MassSquadParams : public FMassSharedFragment
 
 	UPROPERTY(EditAnywhere)
 	float CatchupSpeedFactor = 1.1f;
+
 };
