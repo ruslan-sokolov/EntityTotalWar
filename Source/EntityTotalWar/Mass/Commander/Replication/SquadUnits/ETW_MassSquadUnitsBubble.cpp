@@ -69,9 +69,9 @@ void FETW_MassSquadUnitsClientBubbleHandler::DebugValidateBubbleOnServer()
 		const FMassEntityManager& EntityManager = Serializer->GetEntityManagerChecked();
 
 		// @todo cap at MaxAgentsDraw for now
-		static int32 MaxAgentsDraw = FMath::Min(UE::Mass::Squad::MaxAgentsDraw, (*Agents).Num());
+		const int32 MaxAgentsDrawLocal = FMath::Min(UE::Mass::Squad::MaxAgentsDraw, (*Agents).Num());
 
-		for (int32 Idx = 0; Idx < MaxAgentsDraw; ++Idx)
+		for (int32 Idx = 0; Idx < MaxAgentsDrawLocal; ++Idx)
 		{
 			const FETW_MassSquadUnitsFastArrayItem& CrowdItem = (*Agents)[Idx];
 
@@ -100,9 +100,9 @@ void FETW_MassSquadUnitsClientBubbleHandler::DebugValidateBubbleOnClient()
 		check(ReplicationSubsystem);
 
 		// @todo cap at MaxAgentsDraw for now
-		static int32 MaxAgentsDraw = FMath::Min(UE::Mass::Squad::MaxAgentsDraw, (*Agents).Num());
+		const int32 MaxAgentsDrawLocal = FMath::Min(UE::Mass::Squad::MaxAgentsDraw, (*Agents).Num());
 
-		for (int32 Idx = 0; Idx < MaxAgentsDraw; ++Idx)
+		for (int32 Idx = 0; Idx < MaxAgentsDrawLocal; ++Idx)
 		{
 			const FETW_MassSquadUnitsFastArrayItem& CrowdItem = (*Agents)[Idx];
 
