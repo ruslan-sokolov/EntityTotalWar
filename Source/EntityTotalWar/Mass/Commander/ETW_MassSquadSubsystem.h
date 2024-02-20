@@ -47,6 +47,9 @@ public:
 	//get squad entity from unit id (unit index, manager)
 	// get squads of team (team index, manager)
 
+	//TArray<FMassAgentLookupData> AgentLookupArray;
+	//TMap<FMassNetworkID, FMassReplicatedAgentHandle> NetworkIDToAgentHandleMap;
+
 	// End Squad Manager functions
 };
 

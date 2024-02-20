@@ -130,7 +130,10 @@ struct ENTITYTOTALWAR_API FETW_MassSquadSharedFragment : public FMassSharedFragm
 
 	uint32 SquadIndex = 0;
 	uint32 TargetSquadIndex = 0;
-	
+
+	uint32 CentralUnitId = 0;
+	FVector CentralUnitLocation = FVector::ZeroVector;
+	FVector CentralUnitTargetLocation = FVector::ZeroVector;
 
 	FETW_MassFormation Formation;
 };

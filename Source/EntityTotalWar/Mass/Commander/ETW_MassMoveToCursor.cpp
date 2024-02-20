@@ -24,8 +24,6 @@ namespace ETW
 	FAutoConsoleVariableRef CVarbDebugReplication(TEXT("etw.debug.moveToCursor"), bDebugMoveToCursor, TEXT("Draw Move To Cursor"), ECVF_Cheat);
 
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
-	// @todo provide a better way of selecting agents to debug
-	constexpr int32 MaxAgentsDraw = 300;
 
 	void DebugMoveToCursorAgent(FMassEntityHandle Entity, const FMassEntityManager& EntityManager, float Radius = 100.f)
 	{

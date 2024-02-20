@@ -34,6 +34,7 @@ void UETW_MassSquadTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildCo
 	BuildContext.AddFragment<FETW_MassSquadCommanderFragment>();
 	BuildContext.AddFragment<FMassTargetLocationFragment>();  
 	BuildContext.AddFragment<FTransformFragment>();
+	BuildContext.AddFragment<FAgentRadiusFragment>();
 	BuildContext.AddFragment<FETW_MassTeamFragment>();
 	//BuildContext.AddFragment<FAgentRadiusFragment>();  // actually required for replication
 	

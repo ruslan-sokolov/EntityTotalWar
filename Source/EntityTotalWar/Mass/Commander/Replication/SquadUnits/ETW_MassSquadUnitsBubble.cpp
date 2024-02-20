@@ -7,7 +7,7 @@
 
 namespace UE::Mass::Squad
 {
-	static int32 MaxAgentsDraw = 300;
+	extern int32 MaxAgentsDraw;
 	extern bool bDebugReplicationPositions;
 
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR

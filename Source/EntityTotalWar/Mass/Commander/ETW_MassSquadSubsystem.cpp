@@ -82,8 +82,10 @@ void UETW_MassSquadSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 void UETW_MassSquadSubsystem::PostInitialize()
 {
 	UMassReplicationSubsystem* ReplicationSubsystem = UWorld::GetSubsystem<UMassReplicationSubsystem>(GetWorld());
-
 	check(ReplicationSubsystem);
+
+	//ReplicationSubsystem->GetNextAvailableMassNetID();  // hack for fix 0 id check in some replication code
+
 	ReplicationSubsystem->RegisterBubbleInfoClass(AETW_MassSquadUnitClientBubbleInfo::StaticClass());
 	ReplicationSubsystem->RegisterBubbleInfoClass(AETW_MassSquadClientBubbleInfo::StaticClass());
 }

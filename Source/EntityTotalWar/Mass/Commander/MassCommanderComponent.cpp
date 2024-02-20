@@ -6,13 +6,11 @@
 #include "ETW_MassSquadProcessors.h"
 #include "MassEntityConfigAsset.h"
 #include "MassEntityEQSSpawnPointsGenerator.h"
-#include "Math/RandomStream.h"
 #include "MassSpawnerSubsystem.h"
 #include "MassSpawnerTypes.h"
 #include "Camera/CameraComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "VisualLogger/VisualLogger.h"
-#include "MassEntityConfigAsset.h"
 #include "MassExecutor.h"
 #include "ETW_MassSquadSubsystem.h"
 #include "ETW_MassSquadTraits.h"
@@ -212,11 +210,12 @@ void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMas
 			const FMassEntityTemplate& UnitEntityTemplate = UnitEntityConfig->GetOrCreateEntityTemplate(*World);
 			if (UnitEntityTemplate.IsValid())
 			{
-				TArray<FMassEntityHandle> SpawnedUnitsEntities;
-				FSharedStruct SquadSharedFragmentStruct;
+				FSharedStruct NewSquadFragment_SharedStruct; // should be newly created fragment so it's not shared amoung all entities but with selected group of them (new spawned group in this case) 
 
+				TArray<FMassEntityHandle> SpawnedUnitsEntities;
 				UnitsArchetypeHandle = UnitEntityTemplate.GetArchetype();
-				
+
+				// recreate shared fragments and make them unique for each spawned squad units group
 				FMassArchetypeSharedFragmentValues UnitMutableTemplateSharedFragments = UnitEntityTemplate.GetSharedFragmentValues();  // shared fragments values struct copy
 				for (FSharedStruct& SharedStruct : UnitMutableTemplateSharedFragments.GetMutableSharedFragments())
 				{
@@ -227,12 +226,14 @@ void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMas
 						SquadSharedFragment_UniquePerSquad.SquadIndex = SquadManager.GetSquadId();
 	
 						uint32 SquadSharedFragmentHash = UE::StructUtils::GetStructCrc32(FConstStructView::Make(SquadSharedFragment_UniquePerSquad), SquadSharedFragment_UniquePerSquad.SquadIndex);  // add crc to make hash different from default object 
-						SquadSharedFragmentStruct = EntityManager.GetOrCreateSharedFragmentByHash<FETW_MassSquadSharedFragment>(SquadSharedFragmentHash, SquadSharedFragment_UniquePerSquad);
-						SharedStruct = SquadSharedFragmentStruct;  // make new shared fragment unique per squad and not archetype
+						NewSquadFragment_SharedStruct = EntityManager.GetOrCreateSharedFragmentByHash<FETW_MassSquadSharedFragment>(SquadSharedFragmentHash, SquadSharedFragment_UniquePerSquad);
+						SharedStruct = NewSquadFragment_SharedStruct;  // make new shared fragment unique per squad and not archetype
 						break;
 					}
 				}
-			
+				//
+
+				// create additional "Squad" entity for spawned squad units 
 				for (const FConstSharedStruct& ConstSharedStruct : UnitMutableTemplateSharedFragments.GetConstSharedFragments())
 				{
 					if (const FETW_MassSquadParams* SquadParams = ConstSharedStruct.GetPtr<FETW_MassSquadParams>())
@@ -246,7 +247,7 @@ void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMas
 							{
 								if (SharedStruct.GetMutablePtr<FETW_MassSquadSharedFragment>())
 								{
-									SharedStruct = SquadSharedFragmentStruct;  // copy new shared fragment unique per squad and not archetype
+									SharedStruct = NewSquadFragment_SharedStruct;  // copy new shared fragment unique per squad and not archetype
 									break;
 								}
 							}
@@ -262,14 +263,22 @@ void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMas
 							}
 							
 							SquadArchetypeHandle = SquadEntityTemplate.GetArchetype();
-							SpawnedSquadEntity = EntityManager.CreateEntity(SquadArchetypeHandle, SquadMutableTemplateSharedFragments);
+							//SpawnedSquadEntity = EntityManager.CreateEntity(SquadArchetypeHandle, SquadMutableTemplateSharedFragments);  //create squad entity
+							// hack for observer processors triggers for proper initialization of entity, todo: find method like EntityObserverManager.TriggerObserversCheck(Entity)
+							{
+								TArray<FMassEntityHandle> Temp_InSquadEntities;
+								TSharedRef<FMassEntityManager::FEntityCreationContext> CreationContext = EntityManager.BatchCreateEntities(SquadArchetypeHandle, SquadMutableTemplateSharedFragments, 1, Temp_InSquadEntities);
+								SpawnedSquadEntity = Temp_InSquadEntities[0];
+							}
 							TConstArrayView<FInstancedStruct> FragmentInstances = SquadEntityTemplate.GetInitialFragmentValues();
 							EntityManager.SetEntityFragmentsValues(SpawnedSquadEntity, FragmentInstances);
 						}
 						break;
 					}
 				}
+				//
 				
+				// create units entities, initialize their fragment values and run spawn processor view (to pass transform from query result)
 				TSharedRef<FMassEntityManager::FEntityCreationContext> CreationContext = EntityManager.BatchCreateEntities(UnitsArchetypeHandle, UnitMutableTemplateSharedFragments, Result.NumEntities, SpawnedUnitsEntities);
 				
 				TConstArrayView<FInstancedStruct> FragmentInstances = UnitEntityTemplate.GetInitialFragmentValues();
@@ -284,12 +293,14 @@ void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMas
 				}
 				
 				SpawnedEntities.Append(SpawnedUnitsEntities);
+				//
 			}
 		}
 		
-		break;
+		break;  // expected only one entity type to spawn per call
 	}
 
+	// find processors-initializers
 	/* todo: Use Single Run Processor view in this function */
 	UMassSquadUnitsPostSpawnProcessor* SquadUnitsPostSpawnProc = SquadSubsystem->GetSquadUnitsPostSpawnProcessor();
 	if (SquadUnitsPostSpawnProc == nullptr)
@@ -304,22 +315,23 @@ void UMassCommanderComponent::OnSpawnQueryGeneratorFinished(TConstArrayView<FMas
 		UE_VLOG_UELOG(this, ETW_Mass, Error, TEXT("UMassSquadPostSpawnProcessor missing while trying to spawn squads!"));
 		return;
 	}
-
-
+	//
+	
+	// aux data for processor-initializer
 	FMassProcessingContext UnitsProcessingContext(EntityManager, /*TimeDelta=*/0.0f);
-
-	// pass aux data to processor
 	UnitsProcessingContext.AuxData.InitializeAs<FMassSquadUnitsSpawnAuxData>();
 	FMassSquadUnitsSpawnAuxData& SpawnData = UnitsProcessingContext.AuxData.GetMutable<FMassSquadUnitsSpawnAuxData>();
 	SpawnData.TeamIndex = TeamIndex;
 	SpawnData.CommanderComp = this;
 	SpawnData.SquadInitialTransform = GetOwner()->GetTransform();
+	//
 
+	// run processor-initializer for units entities
 	FMassArchetypeEntityCollection UnitsEntityCollection(UnitsArchetypeHandle, SpawnedEntities, FMassArchetypeEntityCollection::NoDuplicates);
 	TArray<UMassProcessor*> SquadUnitsProcesorView = { SquadUnitsPostSpawnProc };
 	UE::Mass::Executor::RunProcessorsView(SquadUnitsProcesorView, UnitsProcessingContext, &UnitsEntityCollection);
-
 	
+	// run processor-initialzier for squad entity
 	FMassProcessingContext SquadEntityProcessingContext = UnitsProcessingContext;
 	FMassArchetypeEntityCollection SquadEntityCollection(SquadArchetypeHandle, {SpawnedSquadEntity}, FMassArchetypeEntityCollection::NoDuplicates);
 	TArray<UMassProcessor*> SquadProcessorView = { SquadPostSpawnProc };

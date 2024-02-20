@@ -97,7 +97,7 @@ public:
 	void SetTraceFromComponent(USceneComponent* InTraceFromComponent);
 
 	UPROPERTY(BlueprintReadWrite)
-	int32 TeamIndex = 0;
+	int32 TeamIndex = 69;
 
 protected:
 	virtual void BeginPlay() override;

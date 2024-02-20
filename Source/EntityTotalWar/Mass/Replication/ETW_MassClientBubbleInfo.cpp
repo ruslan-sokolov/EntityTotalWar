@@ -11,9 +11,9 @@ namespace UE::Mass::Squad
 
 #if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 	// @todo provide a better way of selecting agents to debug
-	constexpr int32 MaxAgentsDraw = 300;
+	extern int32 MaxAgentsDraw = 300;
 
-	void DebugDrawReplicatedAgent(FMassEntityHandle Entity, const FMassEntityManager& EntityManager, const float Radius = 50.f)
+	static void DebugDrawReplicatedAgent(FMassEntityHandle Entity, const FMassEntityManager& EntityManager, const float Radius = 50.f)
 	{
 		static const FVector DebugCylinderHeight = FVector(0.f, 0.f, 200.f);
 

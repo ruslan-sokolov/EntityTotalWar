@@ -25,11 +25,9 @@ namespace UE::Mass::Squad
 	FAutoConsoleVariableRef CVarbDebugSquadUnits_Server(TEXT("etw.debug.SquadUnits.Server"), bDebugSquadUnits_Server, TEXT("Debug squad units server"), ECVF_Cheat);
 	FAutoConsoleVariableRef CVarbDebugSquads_Client(TEXT("etw.debug.Squads.Client"), bDebugSquads_Client, TEXT("Debug squads client"), ECVF_Cheat);
 	FAutoConsoleVariableRef CVarbDebugSquads_Server(TEXT("etw.debug.Squads.Server"), bDebugSquads_Server, TEXT("Debug squads server"), ECVF_Cheat);
-
-	// @todo provide a better way of selecting agents to debug
-	static int32 MaxAgentsDraw = 30;
-
-	void DebugDrawSquadUnits(FMassEntityHandle Entity, const FMassEntityManager& EntityManager, const float Radius = 50.f)
+	extern int32 MaxAgentsDraw;
+	
+	static void DebugDrawSquadUnits(FMassEntityHandle Entity, const FMassEntityManager& EntityManager, const float Radius = 50.f)
 	{
 		const UWorld* World = EntityManager.GetWorld();
 		if (World == nullptr)
@@ -42,8 +40,6 @@ namespace UE::Mass::Squad
 		const FMassEntityView EntityView(EntityManager, Entity);
 
 		const FTransformFragment& TransformFragment = EntityView.GetFragmentData<FTransformFragment>();
-		const FMassNetworkIDFragment* NetworkIDFragment = EntityView.GetFragmentDataPtr<FMassNetworkIDFragment>();
-		
 		const FMassTargetLocationFragment& TargetLocationFragment = EntityView.GetFragmentData<FMassTargetLocationFragment>();
 		const FETW_MassUnitFragment& UnitFragment = EntityView.GetFragmentData<FETW_MassUnitFragment>();
 		const FETW_MassTeamFragment& TeamFragment = EntityView.GetFragmentData<FETW_MassTeamFragment>();
@@ -51,15 +47,11 @@ namespace UE::Mass::Squad
 
 
 		const FVector& Pos = TransformFragment.GetTransform().GetLocation();
-		const uint32 NetworkID = NetworkIDFragment ? NetworkIDFragment->NetID.GetValue() : -1;
+		const uint32 NetworkID = World->GetNetMode() == NM_Standalone ? -1 : EntityView.GetFragmentData<FMassNetworkIDFragment>().NetID.GetValue();
 
-		// Multiply by a largeish number that is not a multiple of 256 to separate out the color shades a bit
 		const uint32 InitialColor = NetworkID == -1 ? EntityView.GetEntity().SerialNumber * 20001 : NetworkID * 20001;
-
 		const uint8 NetworkIdMod3 = NetworkID % 3;
 		FColor DebugColor;
-
-		// Make a deterministic color from the Mod by 3 to vary how we create it
 		if (NetworkIdMod3 == 0)
 		{
 			DebugColor = FColor(InitialColor % 256, InitialColor / 256 % 256, InitialColor / 256 / 256 % 256);
@@ -78,18 +70,20 @@ namespace UE::Mass::Squad
 		FString DbgString = FString::Printf(TEXT("NetId: %d \n Team %d: \t Unit %d, \t Squad %d: \t TargetSquad: %d \n Target Location: %s"),
 			NetworkID, TeamFragment.TeamIndex, UnitFragment.UnitIndex, SquadSharedFragment.SquadIndex, SquadSharedFragment.TargetSquadIndex, *TargetLocation);
 		
-		if ((World->GetNetMode() == NM_Client && UE::Mass::Squad::bDebugSquadUnits_Client) || (World->GetNetMode() == NM_Standalone && (UE::Mass::Squad::bDebugSquadUnits_Client || UE::Mass::Squad::bDebugSquadUnits_Server)))
+		if ((World->GetNetMode() == NM_Client && bDebugSquadUnits_Client) || (World->GetNetMode() == NM_Standalone && (bDebugSquadUnits_Client || bDebugSquadUnits_Server)))
 		{
+			//DrawDebugCylinder(World, Pos, Pos + 0.5f * DebugCylinderHeight, Radius, /*segments = */24, DebugColor);
 			DrawDebugString(World, Pos, DbgString, nullptr, DebugColor, World->GetDeltaSeconds(), true);
 		}
 
-		if ((World->GetNetMode() == NM_DedicatedServer || World->GetNetMode() == NM_ListenServer) && UE::Mass::Squad::bDebugSquadUnits_Server)
+		if ((World->GetNetMode() == NM_DedicatedServer || World->GetNetMode() == NM_ListenServer) && bDebugSquadUnits_Server)
 		{
+			//DrawDebugCylinder(World, Pos, Pos + 0.5f * DebugCylinderHeight, Radius, /*segments = */24, DebugColor);
 			DrawDebugString(World, Pos + DebugCylinderHeight, FString(TEXT("[Server]")) + DbgString, nullptr, DebugColor, World->GetDeltaSeconds(), true);
 		}
 	}
 
-	void DebugDrawSquads(FMassEntityHandle Entity, const FMassEntityManager& EntityManager, const float Radius = 50.f)
+	static void DebugDrawSquads(FMassEntityHandle Entity, const FMassEntityManager& EntityManager, const float Radius = 50.f)
 	{
 		const UWorld* World = EntityManager.GetWorld();
 		if (World == nullptr)
@@ -103,21 +97,16 @@ namespace UE::Mass::Squad
 
 		const FTransformFragment& TransformFragment = EntityView.GetFragmentData<FTransformFragment>();
 		const FETW_MassTeamFragment& TeamFragment = EntityView.GetFragmentData<FETW_MassTeamFragment>();
-		const FMassNetworkIDFragment& NetworkIDFragment = EntityView.GetFragmentData<FMassNetworkIDFragment>();
 		const FMassTargetLocationFragment& TargetLocationFragment = EntityView.GetFragmentData<FMassTargetLocationFragment>();
 		const FETW_MassSquadCommanderFragment& CommanderFragment = EntityView.GetFragmentData<FETW_MassSquadCommanderFragment>();
 		const FETW_MassSquadSharedFragment& SquadSharedFragment = EntityView.GetSharedFragmentData<FETW_MassSquadSharedFragment>();
 
 		const FVector& Pos = TransformFragment.GetTransform().GetLocation();
-		const uint32 NetworkID = NetworkIDFragment.NetID.GetValue();
+		const uint32 NetworkID = World->GetNetMode() == NM_Standalone ? -1 : EntityView.GetFragmentData<FMassNetworkIDFragment>().NetID.GetValue();
 
-		// Multiply by a largeish number that is not a multiple of 256 to separate out the color shades a bit
 		const uint32 InitialColor = NetworkID == -1 ? EntityView.GetEntity().SerialNumber * 20001 : NetworkID * 20001;
-
 		const uint8 NetworkIdMod3 = NetworkID % 3;
 		FColor DebugColor;
-
-		// Make a deterministic color from the Mod by 3 to vary how we create it
 		if (NetworkIdMod3 == 0)
 		{
 			DebugColor = FColor(InitialColor % 256, InitialColor / 256 % 256, InitialColor / 256 / 256 % 256);
@@ -137,16 +126,16 @@ namespace UE::Mass::Squad
 		FString DbgString = FString::Printf(TEXT("NetId: %d \n Team %d: \t Squad %d: \t TargetSquad: %d \n Commander: %s \n Target Location: %s"),
 			NetworkID, TeamFragment.TeamIndex, SquadSharedFragment.SquadIndex, SquadSharedFragment.TargetSquadIndex, *CommanderName, *TargetLocation);
 		
-		if ((World->GetNetMode() == NM_Client && UE::Mass::Squad::bDebugSquads_Client) || (World->GetNetMode() == NM_Standalone && (UE::Mass::Squad::bDebugSquads_Client || UE::Mass::Squad::bDebugSquads_Server)))
+		if ((World->GetNetMode() == NM_Client && bDebugSquads_Client) || (World->GetNetMode() == NM_Standalone && (bDebugSquads_Client || bDebugSquads_Server)))
 		{
 			//DrawDebugCylinder(World, Pos, Pos + 0.5f * DebugCylinderHeight, Radius, /*segments = */24, DebugColor);
 			DrawDebugString(World, Pos, DbgString, nullptr, DebugColor, World->GetDeltaSeconds(), true);
 		}
 
-		if ((World->GetNetMode() == NM_DedicatedServer || World->GetNetMode() == NM_ListenServer) && UE::Mass::Squad::bDebugSquads_Server)
+		if ((World->GetNetMode() == NM_DedicatedServer || World->GetNetMode() == NM_ListenServer) && bDebugSquads_Server)
 		{
 			//DrawDebugCylinder(World, Pos + 0.5f * DebugCylinderHeight, Pos + DebugCylinderHeight, Radius, /*segments = */24, DebugColor);
-			DrawDebugString(World, Pos, DbgString, nullptr, DebugColor, World->GetDeltaSeconds(), true);
+			DrawDebugString(World, Pos + DebugCylinderHeight, FString(TEXT("[Server]")) + DbgString, nullptr, DebugColor, World->GetDeltaSeconds(), true);
 		}
 	}
 #endif // WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
@@ -211,7 +200,40 @@ void UETW_MassSquadProcessor::Execute(FMassEntityManager& EntityManager, FMassEx
 		
 		});
 	}
-	
+
+	// unit logic
+	{
+		QUICK_SCOPE_CYCLE_COUNTER(UMassSquadProcessor_EntityQuery_Unit);
+		EntityQuery_Unit.ForEachEntityChunk(EntityManager, Context, [&SquadManager](FMassExecutionContext& Context)
+		{
+			
+			const FETW_MassSquadParams& SquadParams = Context.GetConstSharedFragment<FETW_MassSquadParams>();
+			FETW_MassSquadSharedFragment& SquadSharedFragment = Context.GetMutableSharedFragment<FETW_MassSquadSharedFragment>();
+			
+			const TConstArrayView<FTransformFragment> TransformFragments = Context.GetFragmentView<FTransformFragment>();
+			const TConstArrayView<FETW_MassTeamFragment> TeamFragments = Context.GetFragmentView<FETW_MassTeamFragment>();
+			const TConstArrayView<FETW_MassUnitFragment> UnitFragments = Context.GetFragmentView<FETW_MassUnitFragment>();
+
+			const TArrayView<FMassTargetLocationFragment> TargetLocationFragments = Context.GetMutableFragmentView<FMassTargetLocationFragment>();
+
+			SquadSharedFragment.CentralUnitId = UnitFragments[0].UnitIndex;
+			SquadSharedFragment.CentralUnitLocation = TransformFragments[0].GetTransform().GetLocation();
+			SquadSharedFragment.CentralUnitTargetLocation = TargetLocationFragments[0].Target;
+			
+			for (int32 EntityIdx = 0; EntityIdx < Context.GetNumEntities(); EntityIdx++)
+			{
+				// draw debug
+				#if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
+				if (UE::Mass::Squad::bDebugSquadUnits_Client || UE::Mass::Squad::bDebugSquadUnits_Server)
+				{
+					UE::Mass::Squad::DebugDrawSquadUnits(Context.GetEntity(EntityIdx), Context.GetEntityManagerChecked());
+				}
+				#endif
+			}
+
+		});
+	}
+
 	// squad logic
 	{
 		QUICK_SCOPE_CYCLE_COUNTER(UMassSquadProcessor_EntityQuery_Squad);
@@ -228,6 +250,9 @@ void UETW_MassSquadProcessor::Execute(FMassEntityManager& EntityManager, FMassEx
 
 			for (int32 EntityIdx = 0; EntityIdx < Context.GetNumEntities(); EntityIdx++)
 			{
+				TransformFragments[EntityIdx].GetMutableTransform().SetLocation(SquadSharedFragment.CentralUnitLocation);
+				TargetLocationFragments[EntityIdx].Target = SquadSharedFragment.CentralUnitTargetLocation;
+				
 				// draw debug
 				#if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
 				if (UE::Mass::Squad::bDebugSquads_Client || UE::Mass::Squad::bDebugSquads_Server)
@@ -237,36 +262,6 @@ void UETW_MassSquadProcessor::Execute(FMassEntityManager& EntityManager, FMassEx
 				#endif
 			}
 			
-		});
-	}
-
-	// unit logic
-	{
-		QUICK_SCOPE_CYCLE_COUNTER(UMassSquadProcessor_EntityQuery_Unit);
-		EntityQuery_Unit.ForEachEntityChunk(EntityManager, Context, [&SquadManager](FMassExecutionContext& Context)
-		{
-			
-			const FETW_MassSquadParams& SquadParams = Context.GetConstSharedFragment<FETW_MassSquadParams>();
-			FETW_MassSquadSharedFragment& SquadSharedFragment = Context.GetMutableSharedFragment<FETW_MassSquadSharedFragment>();
-			
-			const TConstArrayView<FTransformFragment> TransformFragments = Context.GetFragmentView<FTransformFragment>();
-			const TConstArrayView<FETW_MassTeamFragment> TeamFragments = Context.GetFragmentView<FETW_MassTeamFragment>();
-			const TConstArrayView<FETW_MassUnitFragment> UnitFragments = Context.GetFragmentView<FETW_MassUnitFragment>();
-
-			const TArrayView<FMassTargetLocationFragment> TargetLocationFragments = Context.GetMutableFragmentView<FMassTargetLocationFragment>();
-			
-			for (int32 EntityIdx = 0; EntityIdx < Context.GetNumEntities(); EntityIdx++)
-			{
-
-				// draw debug
-				#if WITH_MASSGAMEPLAY_DEBUG && WITH_EDITOR
-				if (UE::Mass::Squad::bDebugSquadUnits_Client || UE::Mass::Squad::bDebugSquadUnits_Server)
-				{
-					UE::Mass::Squad::DebugDrawSquadUnits(Context.GetEntity(EntityIdx), Context.GetEntityManagerChecked());
-				}
-				#endif
-			}
-
 		});
 	}
 
